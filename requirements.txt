@@ -1,0 +1,2 @@
+pywebview>=6.0
+rumps>=0.4 ; sys_platform == "darwin"

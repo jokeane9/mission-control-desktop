@@ -1,0 +1,22 @@
+{
+  "projects": [
+    {
+      "name": "my-first-project",
+      "path": "~/code/my-first-project",
+      "thesis": "One line on what this project is and where it's heading",
+      "email": "accounts / domains / logins tied to this project (optional)",
+      "prod": "https://example.com",
+      "prod_note": "where it's hosted · rough monthly cost",
+      "stack": "the tech stack, in a phrase",
+      "dev": "how you run it locally",
+      "prod_env": "how production is deployed",
+      "arch": "README.md",
+      "focus": "the single thing you're pushing on right now",
+      "tier": "major"
+    }
+  ],
+  "tools": {
+    "vizstack": "",
+    "agentviz": ""
+  }
+}

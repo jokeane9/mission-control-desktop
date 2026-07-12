@@ -1,0 +1,12 @@
+baseline.json
+index.html
+viz/
+.watch.log
+__pycache__/
+.venv/
+build/
+dist/
+packaging/icon.ico
+packaging/windows/MicrosoftEdgeWebview2Setup.exe
+.icon.iconset/
+*.app/
