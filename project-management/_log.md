@@ -37,7 +37,29 @@ API (not git push); launch unsigned, add signing later.
 
 **RESUME HERE (next session options):**
 1. Windows signing via SignPath (free) — enroll, add the signing step to
-   `release.yml`. First real "Next" roadmap item.
-2. Stand up `ci.yml` (build both platforms + lint on PRs) + branch protection.
-3. Seed GitHub Issues/Milestone from `ROADMAP.md` if we want the GitHub PM layer.
-4. Rotate `TAP_GITHUB_TOKEN` — it was pasted in chat during setup.
+   `release.yml`. First real "Next" roadmap item (issue #7).
+2. Rotate `TAP_GITHUB_TOKEN` — it was pasted in chat during setup.
+
+---
+
+## 2026-07-12 (later) — CI/CD hardening + GitHub PM layer
+
+**What happened:** Built out the rest of the PM/CI scaffolding.
+
+- `ci.yml` guardrail: fast `check` (ruff real-errors + compile + render smoke) on
+  push/PR, full both-platform packaging `build` on PRs.
+- Branch protection on `main`: requires the `check` status check;
+  `enforce_admins=false` so the owner still pushes directly, contributors' PRs
+  must be green.
+- `CHANGELOG.md` (seeded 1.0.0–1.0.2), `dependabot.yml` (actions + pip), issue
+  forms (bug/feature) + PR template.
+- Labels `platform:mac|windows`, `packaging`, `signing`, `ci`; milestone
+  "v1.1 — signing & distribution"; roadmap seeded into issues #7–#13.
+
+**Owner-only follow-ups (I can't do these):**
+- GitHub **Project board** — CLI token lacks the `project` scope. Run
+  `gh auth refresh -s project,read:project` then
+  `gh project create --owner jokeane9 --title "Mission Control"` (or make it in
+  the web UI). Add issues #7–#13 to it.
+- Rotate `TAP_GITHUB_TOKEN` (exposed in chat during setup).
+- SignPath enrollment (issue #7).

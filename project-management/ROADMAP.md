@@ -12,14 +12,13 @@ items, reorder if priorities shifted, add anything new. Now / Next / Later.
 
 ## Next
 
-- [ ] **Windows code signing** — enroll in SignPath Foundation (free OSS), add the
-      signing step to `release.yml` before the release upload. Kills SmartScreen.
+- [ ] **Windows code signing** ([#7](https://github.com/jokeane9/mission-control-desktop/issues/7)) —
+      enroll in SignPath Foundation (free OSS), add the signing step to
+      `release.yml` before the release upload. Kills SmartScreen.
       (`platform:windows`, `signing`)
-- [ ] **winget listing** — PR a manifest to microsoft/winget-pkgs pointing at the
-      GitHub release. Do *after* signing (winget rejects low-reputation unsigned
-      installers). (`platform:windows`, `packaging`)
-- [ ] **CI on PRs** — a `ci.yml` that builds both platforms + lints on every PR,
-      so a broken change can't reach a tag. Add branch protection once it's green.
+- [ ] **winget listing** ([#8](https://github.com/jokeane9/mission-control-desktop/issues/8)) —
+      PR a manifest to microsoft/winget-pkgs. Do *after* signing (winget rejects
+      low-reputation unsigned installers). (`platform:windows`, `packaging`)
 
 ## Later
 
@@ -37,6 +36,10 @@ items, reorder if priorities shifted, add anything new. Now / Next / Later.
 
 ## Completed
 
+- [x] 2026-07-12 — PM + CI/CD scaffolding: CLAUDE.md, project-management/ docs,
+      guardrail `ci.yml` (lint + render smoke + both-platform build on PRs),
+      branch protection on `main` (requires CI), CHANGELOG, Dependabot,
+      issue/PR templates, labels + v1.1 milestone, roadmap seeded to issues #7–#13
 - [x] 2026-07-12 — Cross-platform refactor (per-user data dir when frozen,
       first-run sample seeding, Ctrl labels on Windows, configurable viz tools)
 - [x] 2026-07-12 — Packaging: PyInstaller spec, mac sign/notarize/staple script,
