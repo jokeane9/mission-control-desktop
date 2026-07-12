@@ -1,17 +1,18 @@
-# Homebrew Cask for Mission Control.
+# Homebrew Cask for Mission Control (reference copy).
 #
-# This installs the DMG from GitHub Releases. It works whether or not the app
-# is notarized; if it isn't, macOS shows a one-time "Open Anyway" prompt (see
-# the README). Publish it by copying this file into a tap repo named
-# `homebrew-tap` under your account, so users can run:
+# The LIVE cask users install is in the tap repo jokeane9/homebrew-tap
+# (Casks/mission-control-desktop.rb); keep this copy in sync with it.
 #
 #     brew install --cask jokeane9/tap/mission-control-desktop
 #
-# Update `version` and `sha256` on each release. Get the checksum with:
+# On each release, bump `version` and refresh `sha256`:
 #     shasum -a 256 dist/MissionControl-<version>.dmg
+#
+# The DMG installs whether or not the app is notarized; unsigned builds show a
+# one-time "Open Anyway" prompt (see the README).
 cask "mission-control-desktop" do
   version "1.0.0"
-  sha256 :no_check # replace with the real DMG checksum once a release is cut
+  sha256 "2974a833bd17f80fd907a5820f7589c5c895ad60ef0900f90fdd46b8b73a1035"
 
   url "https://github.com/jokeane9/mission-control-desktop/releases/download/v#{version}/MissionControl-#{version}.dmg"
   name "Mission Control"
