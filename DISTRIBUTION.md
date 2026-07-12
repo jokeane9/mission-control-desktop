@@ -100,9 +100,31 @@ the #1 AV-heuristic trigger) wrapped in an Inno Setup installer
 ([packaging/windows/installer.iss](packaging/windows/installer.iss)) that
 checks the registry for the WebView2 Evergreen runtime and silently runs the
 ~2 MB Microsoft bootstrapper only if it's missing (Win11 and current Win10
-already ship WebView2). A portable zip is produced as a fallback. Add your
-signing step at the marked spot in the release workflow, signing
-`MissionControl-*-setup.exe`.
+already ship WebView2). A portable zip is produced as a fallback.
+
+### Turning on SignPath signing (the step is already wired)
+
+The `windows` job in [release.yml](.github/workflows/release.yml) already has
+the SignPath signing step. It's dormant until the secrets exist, so releases
+ship unsigned until you finish enrollment — then it activates automatically.
+
+1. **Apply to SignPath Foundation** (free OSS signing) at
+   <https://signpath.org/terms>. Once approved, in the SignPath console create a
+   **project** and a **signing policy**.
+2. **Match the slugs.** The workflow uses `project-slug: mission-control-desktop`
+   and `signing-policy-slug: release-signing`. Either name your SignPath project
+   and policy those exact slugs, or edit the two lines in the `Sign installer
+   with SignPath` step to match what you created.
+3. **Add two secrets** to `jokeane9/mission-control-desktop`:
+   ```sh
+   gh secret set SIGNPATH_API_TOKEN --repo jokeane9/mission-control-desktop   # from SignPath console
+   gh secret set SIGNPATH_ORG_ID    --repo jokeane9/mission-control-desktop   # your SignPath organization id (GUID)
+   ```
+4. **Tag a release.** The job uploads the unsigned installer, submits it to
+   SignPath, and overwrites `dist/*-setup.exe` in place with the signed file
+   before the release is published. The **installer** is signed; the portable
+   zip's inner `.exe` is not — point users at the installer, or extend the step
+   to also sign the exe before it's packaged if you need a signed zip.
 
 **After signing, list it on winget** (PR a manifest to microsoft/winget-pkgs
 pointing at the GitHub release URL) — free discoverability + `winget upgrade`

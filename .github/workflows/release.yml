@@ -5,8 +5,9 @@
 # working (but Gatekeeper/SmartScreen-unfriendly) artifacts:
 #   macOS:   MACOS_CERT_P12 (base64 .p12), MACOS_CERT_PASSWORD,
 #            CODESIGN_IDENTITY, APPLE_ID, APPLE_TEAM_ID, APPLE_APP_PASSWORD
-#   Windows: (recommended) SignPath or Azure Trusted Signing — add a signing
-#            step where marked below once enrolled. See DISTRIBUTION.md.
+#   Windows: SignPath (free for OSS) — the signing step is already wired in the
+#            windows job; it activates once SIGNPATH_API_TOKEN + SIGNPATH_ORG_ID
+#            secrets are set and the project/policy slugs match. See DISTRIBUTION.md.
 #
 # After publishing, the bump-tap job updates the Homebrew cask in
 # jokeane9/homebrew-tap. It needs one secret, TAP_GITHUB_TOKEN — a token with
@@ -57,6 +58,11 @@ jobs:
 
   windows:
     runs-on: windows-latest
+    # SignPath signing runs only when SIGNPATH_API_TOKEN is set. Secrets aren't
+    # usable in `if:`, so surface it as a job-level env var and gate on that.
+    # Until enrollment clears, the installer ships UNSIGNED — the free path.
+    env:
+      SIGNPATH_API_TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -70,8 +76,36 @@ jobs:
         env:
           APP_VERSION: ${{ github.ref_name }}
         run: powershell -ExecutionPolicy Bypass -File packaging/build_windows.ps1
-      # --- optional: add SignPath / Azure Trusted Signing step here to sign
-      #     "dist/MissionControl-*-setup.exe" before release (DISTRIBUTION.md) ---
+
+      # ---- Code signing via SignPath (free for OSS) ----
+      # To enable: add secrets SIGNPATH_API_TOKEN + SIGNPATH_ORG_ID, and make
+      # sure project-slug / signing-policy-slug below match your SignPath
+      # project (created during enrollment). See DISTRIBUTION.md → Windows.
+      # SignPath fetches the artifact by its GitHub artifact id, so the unsigned
+      # installer is uploaded first, then overwritten in-place with the signed one.
+      - name: Upload unsigned installer for SignPath
+        if: env.SIGNPATH_API_TOKEN != ''
+        id: unsigned
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-unsigned-installer
+          path: dist/*-setup.exe
+          if-no-files-found: error
+      - name: Sign installer with SignPath
+        if: env.SIGNPATH_API_TOKEN != ''
+        uses: SignPath/github-action-submit-signing-request@v1
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ secrets.SIGNPATH_ORG_ID }}
+          project-slug: mission-control-desktop
+          signing-policy-slug: release-signing
+          github-artifact-id: ${{ steps.unsigned.outputs.artifact-id }}
+          wait-for-completion: true
+          output-artifact-directory: dist    # overwrites dist/*-setup.exe, now signed
+      - name: Note unsigned build
+        if: env.SIGNPATH_API_TOKEN == ''
+        run: echo "SIGNPATH_API_TOKEN not set — shipping UNSIGNED installer (free path)."
+
       - uses: actions/upload-artifact@v4
         with:
           name: windows-build
