@@ -1,0 +1,36 @@
+name: Bug report
+description: Something isn't working
+labels: [bug]
+body:
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options: [macOS, Windows, Both, Running from source]
+    validations: { required: true }
+  - type: input
+    id: version
+    attributes:
+      label: Mission Control version
+      description: From the app, the release you downloaded, or the git commit.
+      placeholder: "1.0.2"
+    validations: { required: true }
+  - type: input
+    id: os
+    attributes:
+      label: OS version
+      placeholder: "macOS 26.1 / Windows 11 23H2"
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, what you got. Screenshots help.
+    validations: { required: true }
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1.
+        2.
+        3.

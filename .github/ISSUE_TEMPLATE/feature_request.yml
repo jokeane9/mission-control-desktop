@@ -1,0 +1,19 @@
+name: Feature request
+description: Suggest an idea or improvement
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What are you trying to do that's hard or impossible today?
+    validations: { required: true }
+  - type: textarea
+    id: idea
+    attributes:
+      label: Proposed solution
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform relevance
+      options: [Both, macOS only, Windows only, Not platform-specific]

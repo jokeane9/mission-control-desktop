@@ -1,0 +1,55 @@
+# Guardrail CI — runs on PRs and pushes to main (NOT tags; tags are release.yml).
+# `check` is a fast sanity pass; `build` proves the app still packages on both
+# platforms so a broken change can't reach a release tag.
+name: ci
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install ruff
+      - name: Lint (real errors only — syntax, undefined names)
+        run: ruff check --select=E9,F63,F7,F82 .
+      - name: Byte-compile every module
+        run: python -m compileall -q app.py generate.py menubar.py gen_icon.py packaging
+      - name: Render smoke test (generate must produce a page)
+        run: |
+          python generate.py
+          test -s index.html && echo "index.html rendered ($(wc -c < index.html) bytes)"
+
+  build:
+    # The real guardrail: does it still package? PRs only — heavy.
+    if: github.event_name == 'pull_request'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14
+          - os: windows-latest
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - name: Install deps
+        run: pip install -r requirements.txt pyinstaller
+      - name: Build (macOS)
+        if: runner.os == 'macOS'
+        run: ./packaging/build_macos.sh
+      - name: Build (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          pip install pillow pythonnet
+          python packaging/make_ico.py
+          powershell -ExecutionPolicy Bypass -File packaging/build_windows.ps1
