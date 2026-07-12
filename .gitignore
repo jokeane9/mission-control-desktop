@@ -10,3 +10,4 @@ packaging/icon.ico
 packaging/windows/MicrosoftEdgeWebview2Setup.exe
 .icon.iconset/
 *.app/
+.env
