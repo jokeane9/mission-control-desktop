@@ -128,12 +128,34 @@ and submit any Defender false positive via Microsoft's WDSI portal.
 `baseline.json` is your personal config (project paths, account notes) and is
 gitignored — never commit it. The repo ships `baseline.sample.json` only.
 
-## Release flow (once secrets are in place)
+## Release flow
 
 ```sh
-git tag v1.0.0 && git push --tags   # CI builds mac dmg + win installer/zip
-                                    # → draft GitHub release with artifacts
+git tag v1.2.0 && git push --tags   # CI builds mac dmg + win installer/zip,
+                                    # publishes a GitHub release, and bumps the
+                                    # Homebrew cask in jokeane9/homebrew-tap
 ```
+
+The `bump-tap` job in the workflow downloads the freshly-released DMG, computes
+its `sha256`, and pushes the new `version` + checksum into the tap's cask — so
+`brew upgrade` picks up every release with no manual step.
+
+### Homebrew tap auto-bump: the one required secret
+
+`bump-tap` pushes to a **different** repo (`jokeane9/homebrew-tap`), which the
+default `GITHUB_TOKEN` can't write to. Give it a token once:
+
+1. Create a **fine-grained personal access token** at
+   <https://github.com/settings/tokens?type=beta> → Repository access = *only*
+   `jokeane9/homebrew-tap` → Permissions → Contents: **Read and write**.
+2. Add it to this repo as a secret named `TAP_GITHUB_TOKEN`:
+   ```sh
+   gh secret set TAP_GITHUB_TOKEN --repo jokeane9/mission-control-desktop
+   # (paste the token when prompted — it never touches the repo)
+   ```
+
+Without the secret the job simply logs "skipping" and the release still
+succeeds; you'd then bump the cask by hand.
 
 Local builds: `./packaging/build_macos.sh` (macOS) ·
 `powershell -File packaging\build_windows.ps1` (Windows; needs Python 3.12+,
