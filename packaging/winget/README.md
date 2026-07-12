@@ -36,17 +36,25 @@ app is renamed, rename these files and the identifier to match.
    wingetcreate submit --token <gh-token> packaging\winget\out\manifests\j\JohnOKeane\MissionControl\1.1.0
    ```
 
-## Future updates
+## Future updates (already automated)
 
-Once the package exists in winget-pkgs, each new release is a one-liner with
-Microsoft's [wingetcreate](https://github.com/microsoft/winget-create):
+Once the package exists in winget-pkgs, later releases update it **automatically**
+— the `winget` job in [release.yml](../../.github/workflows/release.yml) runs
+Microsoft's [wingetcreate](https://github.com/microsoft/winget-create) to submit
+the update PR. It's dormant until you enable it:
 
-```sh
-wingetcreate update JohnOKeane.MissionControl \
-  --version 1.2.0 \
-  --urls "https://github.com/jokeane9/mission-control-desktop/releases/download/v1.2.0/MissionControl-1.2.0-setup.exe" \
-  --submit --token <gh-token>
-```
-
-That can be wired into `release.yml` as a dormant job (gated on a token secret)
-like SignPath is — worth doing after the first manual submission lands.
+1. Do the **first submission manually** (steps above) — `wingetcreate update`
+   only works on a package that already exists in winget-pkgs.
+2. Create a PAT that can fork winget-pkgs and open PRs (classic token with
+   `public_repo`, or fine-grained with fork + PR access to your fork), then:
+   ```sh
+   gh secret set WINGET_TOKEN --repo jokeane9/mission-control-desktop
+   ```
+3. From then on, every `v*` tag opens a winget update PR on its own. To run it
+   by hand instead:
+   ```sh
+   wingetcreate update JohnOKeane.MissionControl \
+     --version 1.2.0 \
+     --urls "https://github.com/jokeane9/mission-control-desktop/releases/download/v1.2.0/MissionControl-1.2.0-setup.exe" \
+     --submit --token <gh-token>
+   ```

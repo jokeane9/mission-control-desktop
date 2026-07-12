@@ -9,10 +9,12 @@
 #            windows job; it activates once SIGNPATH_API_TOKEN + SIGNPATH_ORG_ID
 #            secrets are set and the project/policy slugs match. See DISTRIBUTION.md.
 #
-# After publishing, the bump-tap job updates the Homebrew cask in
-# jokeane9/homebrew-tap. It needs one secret, TAP_GITHUB_TOKEN — a token with
-# contents:write on that tap repo. Without it, the job no-ops (release still
-# succeeds); see DISTRIBUTION.md for how to create it.
+# After publishing:
+#   bump-tap  updates the Homebrew cask in jokeane9/homebrew-tap (secret
+#             TAP_GITHUB_TOKEN, contents:write on that repo).
+#   winget    submits a winget-pkgs update PR (secret WINGET_TOKEN; requires the
+#             package to already exist there — first submission is manual).
+# Both no-op without their secret, so the release still succeeds. See DISTRIBUTION.md.
 name: release
 on:
   push:
@@ -171,3 +173,31 @@ jobs:
             -f sha="${BLOB_SHA}" \
             -f branch=main
           echo "cask updated to ${VERSION}"
+
+  winget:
+    needs: release
+    runs-on: windows-latest
+    # Keeps an EXISTING winget listing in sync on each release. Dormant until
+    # WINGET_TOKEN is set (secrets aren't usable in `if:`, so gate via env var).
+    # `wingetcreate update` only works once the package is already in
+    # winget-pkgs — do the FIRST submission manually (packaging/winget/README.md),
+    # then this auto-PRs every later version. Also depends on signing (#7):
+    # winget rejects low-reputation unsigned installers.
+    if: ${{ startsWith(github.ref, 'refs/tags/') && needs.release.result == 'success' }}
+    env:
+      WINGET_TOKEN: ${{ secrets.WINGET_TOKEN }}
+    steps:
+      - name: Submit winget update
+        if: env.WINGET_TOKEN != ''
+        shell: pwsh
+        run: |
+          $version = "${{ github.ref_name }}".TrimStart('v')      # v1.2.0 -> 1.2.0
+          $url = "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/MissionControl-$version-setup.exe"
+          Write-Host "winget update JohnOKeane.MissionControl -> $version"
+          Invoke-WebRequest https://aka.ms/wingetcreate/latest -OutFile wingetcreate.exe
+          .\wingetcreate.exe update JohnOKeane.MissionControl `
+            --version $version --urls $url --submit --token $env:WINGET_TOKEN
+      - name: Note skipped
+        if: env.WINGET_TOKEN == ''
+        shell: pwsh
+        run: Write-Host "WINGET_TOKEN not set - skipping winget auto-submit (first submission is manual; see packaging/winget/README.md)."

@@ -126,11 +126,15 @@ ship unsigned until you finish enrollment — then it activates automatically.
    zip's inner `.exe` is not — point users at the installer, or extend the step
    to also sign the exe before it's packaged if you need a signed zip.
 
-**After signing, list it on winget** (PR a manifest to microsoft/winget-pkgs
-pointing at the GitHub release URL) — free discoverability + `winget upgrade`
+**After signing, list it on winget** — free discoverability + `winget upgrade`
 support. winget does not accept a low-reputation unsigned installer gracefully,
-so do this after signing is in place. Also run each release through VirusTotal
-and submit any Defender false positive via Microsoft's WDSI portal.
+so do this after signing is in place. The manifests are prepped in
+[packaging/winget/](packaging/winget/): run `stamp.sh <version>` and PR the
+result (README there has the steps). After that first PR lands, the `winget` job
+in the release workflow auto-submits every later version — just add a
+`WINGET_TOKEN` secret (a PAT that can fork winget-pkgs and open PRs). Also run
+each release through VirusTotal and submit any Defender false positive via
+Microsoft's WDSI portal.
 
 ## Donations
 
