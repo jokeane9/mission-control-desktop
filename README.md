@@ -9,13 +9,50 @@ to, and the one thing you're pushing on right now.
 Git data is read live from each repo. The human facts live in one editable
 JSON file. Nothing leaves your machine — no server, no telemetry, no accounts.
 
-## Install (packaged app)
+## Install
 
-Grab the latest release for macOS (.dmg) or Windows (setup .exe / portable
-zip) and run it. First launch creates a starter config:
+Pick whichever fits. **Running from source is the lightest option** and needs
+nothing but Python — no installer, no security prompts.
+
+### Run from source (all platforms, zero setup friction)
+
+```sh
+git clone https://github.com/jokeane9/mission-control-desktop
+cd mission-control-desktop
+python3 -m venv .venv && ./.venv/bin/pip install -r requirements.txt
+./.venv/bin/python app.py        # desktop window
+# or, no dependencies at all — just open the generated page in your browser:
+./generate.py --open
+```
+
+### macOS (packaged app)
+
+- **Homebrew** (recommended once a release is tagged):
+  ```sh
+  brew install --cask jokeane9/tap/mission-control-desktop
+  ```
+- **Direct download:** grab the `.dmg` from
+  [Releases](https://github.com/jokeane9/mission-control-desktop/releases),
+  drag the app to Applications.
+- **First launch:** if the build isn't notarized yet, macOS will say it
+  "cannot verify the developer." Open **System Settings → Privacy & Security**,
+  scroll to the Security section, and click **Open Anyway** (one time). This is
+  expected for unsigned open-source apps and is safe — the source is right here.
+
+### Windows (packaged app)
+
+Download the setup `.exe` (or the portable `.zip`) from
+[Releases](https://github.com/jokeane9/mission-control-desktop/releases) and
+run it. If SmartScreen shows "Windows protected your PC," click **More info →
+Run anyway**.
+
+### First run
+
+The app creates a starter config on first launch:
 
 - macOS: `~/Library/Application Support/Mission Control/baseline.json`
 - Windows: `%APPDATA%\Mission Control\baseline.json`
+- From source: `baseline.json` next to the scripts
 
 Add one entry per project — a `name`, a `path` to a local git repo, and
 whatever facts you want on the card — then hit **Refresh git** (⌘R / Ctrl+R).
@@ -39,19 +76,10 @@ whatever facts you want on the card — then hit **Refresh git** (⌘R / Ctrl+R)
 Keyboard: `⌘0` overview · `⌘1–9` jump to a project · `⌘R` rescan git
 (Ctrl on Windows). The page also self-refreshes every 15 minutes.
 
-## Run from source
-
-```sh
-python3 -m venv .venv && ./.venv/bin/pip install -r requirements.txt
-./.venv/bin/python app.py        # desktop window
-./generate.py --open             # or: plain HTML in your browser (stdlib only)
-./.venv/bin/python menubar.py    # macOS menu-bar companion (optional)
-```
-
-From source, config and output live next to the scripts (`baseline.json`,
-`index.html`). Optional: point `tools.vizstack` / `tools.agentviz` in the
-config at [vizstack](https://github.com/jokeane9) / agentviz to get
-architecture and pipeline map tabs per project.
+Optional: on macOS, `./.venv/bin/python menubar.py` adds a menu-bar companion.
+Point `tools.vizstack` / `tools.agentviz` in the config at
+[vizstack](https://github.com/jokeane9) / agentviz to get architecture and
+pipeline map tabs per project.
 
 ## Build the apps
 

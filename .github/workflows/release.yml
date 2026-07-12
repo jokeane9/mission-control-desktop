@@ -16,18 +16,23 @@ on:
 jobs:
   macos:
     runs-on: macos-14
+    # Secrets aren't available in `if:` expressions, so surface the one that
+    # gates signing as a job-level env var and test that instead. With no
+    # secrets set, the import step is skipped and build_macos.sh produces an
+    # unsigned DMG — the free launch path.
+    env:
+      MACOS_CERT_P12: ${{ secrets.MACOS_CERT_P12 }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
       - run: pip install -r requirements.txt pyinstaller
       - name: Import signing certificate (if configured)
-        if: ${{ secrets.MACOS_CERT_P12 != '' }}
+        if: env.MACOS_CERT_P12 != ''
         env:
-          CERT_P12: ${{ secrets.MACOS_CERT_P12 }}
           CERT_PW: ${{ secrets.MACOS_CERT_PASSWORD }}
         run: |
-          echo "$CERT_P12" | base64 --decode > cert.p12
+          echo "$MACOS_CERT_P12" | base64 --decode > cert.p12
           security create-keychain -p ci build.keychain
           security default-keychain -s build.keychain
           security unlock-keychain -p ci build.keychain

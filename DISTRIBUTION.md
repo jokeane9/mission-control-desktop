@@ -5,6 +5,36 @@ about each one. Short version: **App Store review guidelines do not apply to
 direct downloads — but Apple's notarization and Windows code-signing/SmartScreen
 mechanics very much do**, and both have tightened since 2024.
 
+## Launching at $0 (the free path)
+
+You can ship this project for nothing. Here's the zero-cost route, and what
+each choice costs the user in friction:
+
+| Platform | Free option | User friction |
+|---|---|---|
+| All | **Run from source** (`pip install && python app.py`) | None — no Gatekeeper/SmartScreen at all. Best path for a dev audience. |
+| macOS | **Unsigned DMG + Homebrew cask** | One-time "Open Anyway" in System Settings on first launch. |
+| Windows | **SignPath Foundation** (free OSS code signing) | None — a properly signed installer, clears SmartScreen. |
+
+- **Windows is fully solved for free.** SignPath Foundation signs open-source
+  projects at no cost. Mission Control qualifies (OSI license, you own the
+  repo, actively maintained). The publisher name shows as "SignPath
+  Foundation" rather than you — the only trade-off. Apply at
+  <https://signpath.org/terms> and add the signing step to the release
+  workflow. No reason to pay Certum/Azure unless you want your own name as
+  publisher.
+- **macOS notarization has no free tier.** Free Apple IDs cannot create a
+  Developer ID cert or use the notary service, and there is no OSS fee waiver
+  for individual developers. So you either pay $99/yr or ship unsigned. For an
+  open-source app aimed at developers, unsigned + "Open Anyway" (documented in
+  the README) plus a Homebrew cask is a completely normal launch. Turn on
+  notarization later if donations cover the $99 — the CI already supports it,
+  it's just adding secrets.
+- **Recommended sequence:** launch free (SignPath on Windows, unsigned +
+  source + Homebrew on Mac) → if it gains traction and donations, add the
+  Apple $99 and flip on macOS notarization. Nothing about the free launch has
+  to be redone; you only add credentials.
+
 ## macOS
 
 **What's required.** Any app you distribute outside the Mac App Store needs a
