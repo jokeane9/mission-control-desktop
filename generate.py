@@ -45,6 +45,26 @@ BASELINE = os.path.join(DATA, "baseline.json")
 INDEX = os.path.join(DATA, "index.html")
 
 
+# The editable per-project fields, in form order. Single source of truth: the
+# in-app editor form is generated from this list. (key, label, placeholder,
+# required). Fields not listed here — e.g. viz_app/viz_pipeline — are preserved
+# on edit but not shown in the form.
+PROJECT_FIELDS = [
+    ("name",     "Name",      "short-name",                        True),
+    ("path",     "Path",      "~/code/my-app  (a local git repo)", True),
+    ("tier",     "Tier",      "major / tools / minor",             False),
+    ("thesis",   "Thesis",    "one line: what this project is",    False),
+    ("prod",     "Prod URL",  "https://example.com",               False),
+    ("prod_note","Prod note", "hosting · rough monthly cost",      False),
+    ("stack",    "Stack",     "Remix + Postgres",                  False),
+    ("dev",      "Dev",       "how you run it locally",            False),
+    ("prod_env", "Prod env",  "how production is deployed",        False),
+    ("arch",     "Arch doc",  "README.md",                         False),
+    ("email",    "Accounts",  "domains / logins (optional)",       False),
+    ("focus",    "Focus",     "the one thing you're pushing on",   False),
+]
+
+
 def load_config():
     """Read baseline.json; on first run of an installed app, seed it from the
     bundled sample so the dashboard opens with instructions, not an error."""
@@ -55,6 +75,52 @@ def load_config():
         else:
             json.dump({"projects": []}, open(BASELINE, "w"), indent=2)
     return json.load(open(BASELINE))
+
+
+def save_config(cfg):
+    """Write baseline.json back (pretty, atomic-ish via a temp file + replace)."""
+    tmp = BASELINE + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(cfg, f, indent=2, ensure_ascii=False)
+        f.write("\n")
+    os.replace(tmp, BASELINE)
+
+
+def upsert_project(project, original=None):
+    """Add or update one project from the editor. Merges onto any existing
+    record (so fields not in the form — viz_app etc. — survive). `original` is
+    the name before an edit, so a rename replaces rather than duplicates.
+    Returns (ok, error_message)."""
+    name = (project.get("name") or "").strip()
+    if not name:
+        return False, "Name is required."
+    if not (project.get("path") or "").strip():
+        return False, "Path is required."
+    cfg = load_config()
+    projects = cfg.setdefault("projects", [])
+    key = original or name
+    idx = next((i for i, p in enumerate(projects) if p.get("name") == key), None)
+    # block a rename/add that collides with a different existing project
+    clash = next((i for i, p in enumerate(projects)
+                  if p.get("name") == name and i != idx), None)
+    if clash is not None:
+        return False, f"A project named “{name}” already exists."
+    clean = {k: v for k, v in project.items() if str(v).strip() != ""}
+    if idx is not None:
+        projects[idx] = {**projects[idx], **clean}
+    else:
+        projects.append(clean)
+    save_config(cfg)
+    return True, ""
+
+
+def delete_project(name):
+    """Remove a project by name. Returns True if something was removed."""
+    cfg = load_config()
+    before = len(cfg.get("projects", []))
+    cfg["projects"] = [p for p in cfg.get("projects", []) if p.get("name") != name]
+    save_config(cfg)
+    return len(cfg["projects"]) < before
 
 def git(repo, *args):
     try:
@@ -159,31 +225,35 @@ def rows_html(p, g, path):
     def row(label, val):
         return (f'<div class="row"><span class="lbl">{label}</span>'
                 f'<span class="val">{val}</span></div>') if val else ""
-    if p["prod"]:
-        site = f'<a href="{esc(p["prod"])}" target="_blank">{esc(p["prod"].replace("https://",""))}</a>'
-        if p["prod_note"]:
-            site += f' <span class="sub">· {esc(p["prod_note"])}</span>'
+    prod, prod_note = p.get("prod", ""), p.get("prod_note", "")
+    if prod:
+        site = f'<a href="{esc(prod)}" target="_blank">{esc(prod.replace("https://",""))}</a>'
+        if prod_note:
+            site += f' <span class="sub">· {esc(prod_note)}</span>'
     else:
-        site = f'<span class="sub">{esc(p["prod_note"] or "—")}</span>'
-    arch = (f'<a href="{esc(Path(path, p["arch"]).as_uri())}">{esc(p["arch"])}</a>'
-            if p["arch"] else "")
-    outline = arch_outline(path, p.get("arch", ""))
+        site = f'<span class="sub">{esc(prod_note or "—")}</span>'
+    arch_rel = p.get("arch", "")
+    arch = (f'<a href="{esc(Path(path, arch_rel).as_uri())}">{esc(arch_rel)}</a>'
+            if arch_rel else "")
+    outline = arch_outline(path, arch_rel)
     archval = f'{esc(outline)} <span class="sub">·</span> {arch}' if outline and arch else arch
+    focus = p.get("focus", "")
     return (row("Site", site)
             + (row("Email", esc(p.get("email", ""))) if p.get("email") else "")
             + row("Dev", esc(p.get("dev", "")))
             + row("Prod", esc(p.get("prod_env", "")))
-            + row("Stack", esc(p["stack"]))
+            + row("Stack", esc(p.get("stack", "")))
             + row("Arch", archval)
             + row("Last", f'<span class="sub">{esc(g["last_msg"])}</span>')
-            + (f'<div class="focus">{row("Focus", esc(p["focus"]))}</div>' if p["focus"] else ""))
+            + (f'<div class="focus">{row("Focus", esc(focus))}</div>' if focus else ""))
 
 def main():
     cfg = load_config()
     projects, totals = [], {"dirty": 0, "unmerged": 0, "ahead": 0, "attn": 0}
-    for p in cfg["projects"]:
-        path = os.path.expanduser(p["path"])
-        if not os.path.isdir(os.path.join(path, ".git")):
+    for p in cfg.get("projects", []):
+        raw_path = p.get("path", "")
+        path = os.path.expanduser(raw_path) if raw_path else ""
+        if not path or not os.path.isdir(os.path.join(path, ".git")):
             continue
         g = collect(path)
         maps = build_viz(p["name"], path, p, cfg.get("tools", {}))
@@ -207,7 +277,7 @@ def main():
         accent = ' accent' if pr["attn"] else ""
         cards.append(f'''<div class="card{accent}" onclick="nav('{n}')">
   <div class="ctop"><span class="cname">{n}</span><span class="age">{esc(g["last_rel"] or "")}</span></div>
-  <div class="thesis">{esc(p["thesis"])}</div>
+  <div class="thesis">{esc(p.get("thesis", ""))}</div>
   <div class="chips">{chips(g)}</div>
 </div>''')
         tabs = ['<span class="tab on" onclick="tab(this,null)">overview</span>']
@@ -218,7 +288,8 @@ def main():
             tabs.append(f'<span class="tab" onclick="tab(this,\'{esc(url)}\')">{esc(label)} map</span>')
             panes.append('<div class="pane"><iframe data-src="' + esc(url) + '"></iframe></div>')
         details.append(f'''<div class="view" id="v-{n}">
-  <div class="dhead"><span class="dname">{n}</span><span class="dthesis">{esc(p["thesis"])}</span></div>
+  <div class="dhead"><span class="dname">{n}</span><span class="dthesis">{esc(p.get("thesis", ""))}</span>
+    <span class="dbtns editonly"><button class="dbtn" onclick="openEditor('{n}')">Edit</button><button class="dbtn danger" onclick="removeProject('{n}')">Delete</button></span></div>
   <div class="tabs">{"".join(tabs)}</div>
   {"".join(panes)}
 </div>''')
@@ -227,10 +298,9 @@ def main():
         cards.append(
             '<div class="card" style="cursor:default"><div class="ctop">'
             '<span class="cname">No projects yet</span></div>'
-            '<div class="thesis">Add your repos to the config file, then hit '
-            'Refresh git:<br><code style="font-size:11px">'
-            f'{esc(BASELINE)}</code><br>Each entry needs a "name", a "path" '
-            'to a local git repo, and whatever facts you want on the card.'
+            '<div class="thesis">Click <b>＋ Add project</b> in the sidebar to add '
+            'one (needs a name and a path to a local git repo), or edit the config '
+            f'file directly:<br><code style="font-size:11px">{esc(BASELINE)}</code>'
             '</div></div>')
 
     now_dt = datetime.datetime.now()
@@ -314,14 +384,51 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--mono);font
 .statusbar button .spin{display:inline-block}
 .statusbar button.busy .spin{animation:sbspin .7s linear infinite}
 @keyframes sbspin{to{transform:rotate(360deg)}}
+/* --- config editor (shown only under the pywebview bridge) --- */
+/* Higher specificity than the control rules below, so editor controls stay
+   hidden until reveal() drops `nobridge` from <body>. */
+body.nobridge .editonly{display:none}
+.addbtn{margin:6px 12px 0;font:inherit;font-size:11px;color:var(--blue);background:transparent;
+  border:1px dashed var(--border2);border-radius:5px;padding:5px 8px;cursor:pointer;width:calc(100% - 24px)}
+.addbtn:hover{background:var(--panel);border-color:var(--blue)}
+.dbtns{margin-left:auto;display:flex;gap:6px}
+.dbtn{font:inherit;font-size:10px;color:var(--muted);background:#1a212b;border:1px solid var(--border);
+  border-radius:5px;padding:3px 10px;cursor:pointer}
+.dbtn:hover{background:#232c38;color:var(--ink)}
+.dbtn.danger:hover{color:#ff6b6b;border-color:#5a2a2a}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:center;
+  justify-content:center;z-index:50}
+.modal.on{display:flex}
+.sheet{background:var(--panel);border:1px solid var(--border2);border-radius:10px;width:520px;
+  max-width:calc(100vw - 40px);max-height:calc(100vh - 60px);overflow-y:auto;padding:20px 22px;
+  box-shadow:0 12px 40px rgba(0,0,0,.5)}
+.sheet h3{margin:0 0 14px;font-size:14px;color:var(--blue)}
+.field{margin-bottom:10px}
+.field label{display:block;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;
+  color:var(--faint);margin-bottom:4px}
+.field label .req{color:var(--amber)}
+.field input{width:100%;font:inherit;font-size:12.5px;color:var(--ink);background:var(--bg);
+  border:1px solid var(--border2);border-radius:6px;padding:7px 9px;
+  font-family:-apple-system,'Segoe UI','Helvetica Neue',sans-serif}
+.field input:focus{outline:none;border-color:var(--blue)}
+.ferr{color:#ff6b6b;font-size:11px;min-height:15px;margin:2px 0 6px}
+.factions{display:flex;justify-content:flex-end;gap:8px;margin-top:4px}
+.factions button{font:inherit;font-size:12px;border-radius:6px;padding:7px 15px;cursor:pointer;
+  border:1px solid var(--border2)}
+.btn-cancel{background:transparent;color:var(--muted)}
+.btn-cancel:hover{color:var(--ink);background:var(--panel2)}
+.btn-save{background:#1f6feb;border-color:#1f6feb;color:#fff;font-weight:700}
+.btn-save:hover{background:#2a7bff}
+.btn-save:disabled{opacity:.6;cursor:default}
 </style>
-<body>
+<body class="nobridge">
 <div class="app">
   <div class="side">
     <div class="brand">mission-control</div>
     <div class="sitem on" id="s-overview" onclick="nav('overview')"><span class="dot green"></span><span class="sname">overview</span><span class="skey">⌘0</span></div>
     <div class="shead">Projects (%%COUNT%%)</div>
     %%SIDE%%
+    <button class="addbtn editonly" onclick="openEditor()">＋ Add project</button>
   </div>
   <div class="main">
     <div class="view on" id="v-overview"><div class="grid">%%CARDS%%</div></div>
@@ -329,6 +436,15 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--mono);font
   </div>
 </div>
 <div class="statusbar"><span>%%STATS%%</span><span class="sbright"><span id="freshness" data-gen="%%GENTS%%" data-min="%%MIN%%">updated %%NOW%% · reload %%MIN%%m · ⌘0 overview · ⌘1–9 projects</span><button id="refreshgit" onclick="refreshGit(this)" title="Rescan all repos now (⌘R)"><span class="spin">⟳</span> Refresh git</button></span></div>
+<div class="modal" id="editor" onclick="if(event.target===this)closeEditor()"><div class="sheet">
+  <h3 id="editortitle">Add project</h3>
+  <div id="editorfields"></div>
+  <div class="ferr" id="editorerr"></div>
+  <div class="factions">
+    <button class="btn-cancel" onclick="closeEditor()">Cancel</button>
+    <button class="btn-save" id="editorsave" onclick="submitEditor()">Save</button>
+  </div>
+</div></div>
 <script>
 // Freshness guard: git data is a snapshot from generation time. If the file
 // stops being regenerated (menubar app quit / watcher died), the meta-refresh
@@ -341,6 +457,8 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--mono);font
      el.textContent='⚠ STALE — git snapshot is '+m+'m old (regen not running)';}}
  tick();setInterval(tick,30000);})();
 var NAMES=%%NAMES%%;
+var FIELDS=%%FIELDS%%;          // [key,label,placeholder,required] — form source of truth
+var PROJECTS_RAW=%%PROJECTS_RAW%%;   // raw config entries, for prefilling edits
 function nav(n){
   document.querySelectorAll('.view').forEach(function(v){v.classList.remove('on')});
   document.querySelectorAll('.sitem').forEach(function(s){s.classList.remove('on')});
@@ -379,6 +497,59 @@ document.addEventListener('keydown',function(e){
   if(i>=1&&i<=NAMES.length){nav(NAMES[i-1]);e.preventDefault();}
 });
 (function(){var h=location.hash.replace('#','');if(h.indexOf('p/')===0)nav(h.slice(2));})();
+
+// --- config editor (only usable through the pywebview Python bridge) ---
+(function(){
+  // reveal Add/Edit/Delete controls only when the bridge exists (packaged app);
+  // in a plain browser they'd have nothing to write to. Dropping the body class
+  // lets each control fall back to its natural display.
+  function reveal(){document.body.classList.remove('nobridge');}
+  if(window.pywebview&&window.pywebview.api){reveal();}
+  else{window.addEventListener('pywebviewready',reveal);}
+})();
+var EDIT_ORIG=null;
+function bridge(){return window.pywebview&&window.pywebview.api;}
+function openEditor(name){
+  EDIT_ORIG=name||null;
+  var data={};
+  if(name){for(var i=0;i<PROJECTS_RAW.length;i++){if(PROJECTS_RAW[i].name===name){data=PROJECTS_RAW[i];break;}}}
+  document.getElementById('editortitle').textContent=name?('Edit '+name):'Add project';
+  var box=document.getElementById('editorfields');box.innerHTML='';
+  FIELDS.forEach(function(f){
+    var key=f[0],label=f[1],ph=f[2],req=f[3];
+    var div=document.createElement('div');div.className='field';
+    var lab=document.createElement('label');lab.textContent=label;
+    if(req){var s=document.createElement('span');s.className='req';s.textContent=' *';lab.appendChild(s);}
+    var inp=document.createElement('input');inp.type='text';inp.id='f-'+key;
+    inp.value=data[key]!=null?String(data[key]):'';inp.placeholder=ph;inp.setAttribute('spellcheck','false');
+    inp.addEventListener('keydown',function(e){if(e.key==='Enter')submitEditor();});
+    div.appendChild(lab);div.appendChild(inp);box.appendChild(div);
+  });
+  document.getElementById('editorerr').textContent='';
+  var sv=document.getElementById('editorsave');sv.disabled=false;sv.textContent='Save';
+  document.getElementById('editor').classList.add('on');
+  var first=document.getElementById('f-'+FIELDS[0][0]);if(first)first.focus();
+}
+function closeEditor(){document.getElementById('editor').classList.remove('on');}
+function submitEditor(){
+  var proj={},err=document.getElementById('editorerr');
+  FIELDS.forEach(function(f){proj[f[0]]=document.getElementById('f-'+f[0]).value.trim();});
+  if(!proj.name){err.textContent='Name is required.';return;}
+  if(!proj.path){err.textContent='Path is required.';return;}
+  if(!(bridge()&&window.pywebview.api.save_project)){
+    err.textContent='Editing needs the desktop app.';return;}
+  var btn=document.getElementById('editorsave');btn.disabled=true;btn.textContent='Saving…';
+  window.pywebview.api.save_project(proj,EDIT_ORIG).then(function(r){
+    if(r&&r.ok){location.reload();}
+    else{btn.disabled=false;btn.textContent='Save';err.textContent=(r&&r.error)||'Save failed.';}
+  }).catch(function(){btn.disabled=false;btn.textContent='Save';err.textContent='Save failed.';});
+}
+function removeProject(name){
+  if(!confirm('Remove “'+name+'” from Mission Control?\\nThis only edits baseline.json — it does not touch the repo.'))return;
+  if(!(bridge()&&window.pywebview.api.delete_project))return;
+  window.pywebview.api.delete_project(name).then(function(r){if(r&&r.ok)location.reload();});
+}
+document.addEventListener('keydown',function(e){if(e.key==='Escape')closeEditor();});
 </script>
 </body></html>"""
 
@@ -391,7 +562,10 @@ document.addEventListener('keydown',function(e){
                .replace("%%STATS%%", stats)
                .replace("%%NOW%%", now)
                .replace("%%MIN%%", str(REFRESH_MIN))
-               .replace("%%NAMES%%", json.dumps([pr["p"]["name"] for pr in projects])))
+               .replace("%%NAMES%%", json.dumps([pr["p"]["name"] for pr in projects]))
+               .replace("%%FIELDS%%", json.dumps(PROJECT_FIELDS))
+               .replace("%%PROJECTS_RAW%%",
+                        json.dumps(cfg.get("projects", [])).replace("</", "<\\/")))
     page = page.replace("⌘", MOD)   # platform shortcut labels (⌘ vs Ctrl+)
     out = INDEX
     open(out, "w", encoding="utf-8").write(page)

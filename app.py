@@ -14,14 +14,35 @@ ICON = generate.resource_path("icon.icns")
 
 
 class Api:
-    """JS bridge: the dashboard's 'Refresh git' button (and ⌘R) call this to
-    rescan every repo's git and rewrite index.html; the page then reloads."""
+    """JS bridge for the dashboard. Refresh git rescans every repo; the config
+    editor adds/edits/removes projects in baseline.json. Every method rewrites
+    index.html so the page can just reload to show the result."""
+
     def refresh(self):
         try:
             generate.main()   # fresh git scan + rewrite index.html
             return True
         except Exception:
             return False
+
+    def save_project(self, project, original=None):
+        """Add or update one project, then regenerate. Returns
+        {ok, error} so the editor can show a message instead of failing silently."""
+        try:
+            ok, err = generate.upsert_project(project, original)
+            if ok:
+                generate.main()
+            return {"ok": ok, "error": err}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def delete_project(self, name):
+        try:
+            generate.delete_project(name)
+            generate.main()
+            return {"ok": True, "error": ""}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
 
 
 def _brand_dock():
