@@ -1,0 +1,6 @@
+# Version manifest — TEMPLATE (see README.md / stamp.sh).
+PackageIdentifier: JohnOKeane.MissionControl
+PackageVersion: __VERSION__
+DefaultLocale: en-US
+ManifestType: version
+ManifestVersion: 1.6.0

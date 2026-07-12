@@ -1,0 +1,21 @@
+# Installer manifest — TEMPLATE. Do not submit this file directly; run
+# packaging/winget/stamp.sh <version> to fill __VERSION__ / __INSTALLER_URL__ /
+# __SHA256__ against a real signed release. See README.md in this folder.
+PackageIdentifier: JohnOKeane.MissionControl
+PackageVersion: __VERSION__
+InstallerLocale: en-US
+InstallerType: inno
+Scope: user                     # installer.iss uses PrivilegesRequired=lowest → per-user
+UpgradeBehavior: install
+InstallModes:
+  - interactive
+  - silent
+  - silentWithProgress
+# Inno registers its uninstall key as {AppId}_is1 — lets winget detect/upgrade.
+ProductCode: '{7C1FBE0D-3E1A-4A6B-9B1B-6C2C6A2C9D01}_is1'
+Installers:
+  - Architecture: x64
+    InstallerUrl: __INSTALLER_URL__
+    InstallerSha256: __SHA256__
+ManifestType: installer
+ManifestVersion: 1.6.0

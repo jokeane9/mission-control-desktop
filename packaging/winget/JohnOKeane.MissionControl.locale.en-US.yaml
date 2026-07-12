@@ -1,0 +1,29 @@
+# Default-locale manifest — TEMPLATE (see README.md / stamp.sh).
+PackageIdentifier: JohnOKeane.MissionControl
+PackageVersion: __VERSION__
+PackageLocale: en-US
+Publisher: John O'Keane
+PublisherUrl: https://github.com/jokeane9
+PublisherSupportUrl: https://github.com/jokeane9/mission-control-desktop/issues
+Author: John O'Keane
+PackageName: Mission Control
+PackageUrl: https://github.com/jokeane9/mission-control-desktop
+License: MIT
+LicenseUrl: https://github.com/jokeane9/mission-control-desktop/blob/main/LICENSE
+Copyright: Copyright (c) 2026 John O'Keane
+ShortDescription: One window, every project's live git state.
+Description: >-
+  Mission Control is a local, single-window dashboard that shows every one of
+  your git projects' live state — branch, uncommitted, unmerged and unpushed
+  counts — alongside the human facts no tool can derive. Git data is read live
+  per repo; nothing leaves your machine. Free and open source.
+Moniker: mission-control
+Tags:
+  - git
+  - dashboard
+  - developer-tools
+  - productivity
+  - devtools
+ReleaseNotesUrl: https://github.com/jokeane9/mission-control-desktop/releases/tag/v__VERSION__
+ManifestType: defaultLocale
+ManifestVersion: 1.6.0
