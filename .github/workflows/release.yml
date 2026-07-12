@@ -102,12 +102,15 @@ jobs:
     steps:
       - name: Bump Homebrew cask in the tap
         env:
-          TAP_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
+          # gh reads GH_TOKEN for auth; a fine-grained PAT authenticates to the
+          # REST API as a Bearer token (its native path) — far more reliable
+          # than git-over-HTTPS basic auth for these tokens.
+          GH_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
           TAP_REPO: jokeane9/homebrew-tap
           CASK_PATH: Casks/mission-control-desktop.rb
         run: |
           set -euo pipefail
-          if [ -z "${TAP_TOKEN:-}" ]; then
+          if [ -z "${GH_TOKEN:-}" ]; then
             echo "No TAP_GITHUB_TOKEN secret — skipping tap auto-bump."
             echo "Add a token with contents:write on ${TAP_REPO} to enable it."
             exit 0
@@ -122,12 +125,15 @@ jobs:
           done
           SHA="$(sha256sum "$DMG" | awk '{print $1}')"
           echo "version=${VERSION} sha256=${SHA}"
-          git clone --depth 1 "https://x-access-token:${TAP_TOKEN}@github.com/${TAP_REPO}.git" tap
-          cd tap
-          sed -i -E "s|^  version \"[^\"]*\"|  version \"${VERSION}\"|" "$CASK_PATH"
-          sed -i -E "s|^  sha256 \"[0-9a-f]+\"|  sha256 \"${SHA}\"|" "$CASK_PATH"
-          git config user.name  "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          if git diff --quiet; then echo "cask already current"; exit 0; fi
-          git commit -am "mission-control-desktop ${VERSION}"
-          git push
+          # Read the current cask + its blob sha, edit, and commit it back
+          # through the Contents API (no git push, no basic-auth).
+          gh api "repos/${TAP_REPO}/contents/${CASK_PATH}" --jq '.content' | base64 -d > cask.rb
+          BLOB_SHA="$(gh api "repos/${TAP_REPO}/contents/${CASK_PATH}" --jq '.sha')"
+          sed -i -E "s|^  version \"[^\"]*\"|  version \"${VERSION}\"|" cask.rb
+          sed -i -E "s|^  sha256 \"[0-9a-f]+\"|  sha256 \"${SHA}\"|" cask.rb
+          gh api -X PUT "repos/${TAP_REPO}/contents/${CASK_PATH}" \
+            -f message="mission-control-desktop ${VERSION}" \
+            -f content="$(base64 -w0 cask.rb)" \
+            -f sha="${BLOB_SHA}" \
+            -f branch=main
+          echo "cask updated to ${VERSION}"
