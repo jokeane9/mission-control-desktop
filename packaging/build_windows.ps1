@@ -9,6 +9,7 @@ $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent $PSScriptRoot
 Set-Location $Root
 $Version = if ($env:APP_VERSION) { $env:APP_VERSION } else { "1.0.0" }
+$Version = $Version -replace '^v', ''                    # v1.0.0 -> 1.0.0
 
 if (Test-Path build) { Remove-Item -Recurse -Force build }
 if (Test-Path dist)  { Remove-Item -Recurse -Force dist }

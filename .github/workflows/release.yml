@@ -56,7 +56,10 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
-      - run: pip install -r requirements.txt pyinstaller pillow
+      - run: pip install -r requirements.txt pyinstaller pillow pythonnet
+      - name: Install Inno Setup (for the installer; zip still ships without it)
+        run: choco install innosetup --no-progress -y
+        continue-on-error: true
       - run: python packaging/make_ico.py
       - name: Build
         env:
@@ -74,7 +77,9 @@ jobs:
   release:
     needs: [macos, windows]
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/')
+    # always() so a platform that needs iteration doesn't block the release —
+    # whatever artifacts uploaded get published (Mac ships even if Windows fails).
+    if: ${{ always() && startsWith(github.ref, 'refs/tags/') }}
     permissions: { contents: write }
     steps:
       - uses: actions/download-artifact@v4
@@ -82,5 +87,5 @@ jobs:
       - uses: softprops/action-gh-release@v2
         with:
           files: dist/*
-          draft: true
+          draft: false
           generate_release_notes: true

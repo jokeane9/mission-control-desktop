@@ -12,7 +12,7 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
-VERSION="${APP_VERSION:-1.0.0}"
+VERSION="${APP_VERSION:-1.0.0}"; VERSION="${VERSION#v}"   # v1.0.0 -> 1.0.0
 PYI="${PYINSTALLER:-pyinstaller}"
 
 command -v "$PYI" >/dev/null || {

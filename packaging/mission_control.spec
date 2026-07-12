@@ -11,6 +11,7 @@ import sys
 
 ROOT = os.path.dirname(SPECPATH)          # repo root (spec lives in packaging/)
 MAC = sys.platform == "darwin"
+VERSION = os.environ.get("APP_VERSION", "1.0.0").lstrip("v")   # v1.0.0 -> 1.0.0
 
 datas = [(os.path.join(ROOT, "baseline.sample.json"), ".")]
 if MAC:
@@ -50,7 +51,7 @@ if MAC:
         icon=os.path.join(ROOT, "icon.icns"),
         bundle_identifier="com.keane.mission-control",
         info_plist={
-            "CFBundleShortVersionString": os.environ.get("APP_VERSION", "1.0.0"),
+            "CFBundleShortVersionString": VERSION,
             "NSHighResolutionCapable": True,
             "LSMinimumSystemVersion": "11.0",
             "NSHumanReadableCopyright": "MIT License",
