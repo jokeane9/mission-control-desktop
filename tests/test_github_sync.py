@@ -83,6 +83,33 @@ def test_render_uncloned_and_merge():
     assert h.count(">ghost<") <= 3                     # not duplicated
 
 
+def test_p33_clone_and_status():
+    import resolve
+    # resolve exposes the clone URL for an uncloned repo
+    repo = {"path": None, "remote": "github.com/o/x",
+            "gh": {"name": "x", "remote": "https://github.com/o/x.git",
+                   "html_url": "https://github.com/o/x"}}
+    facts, _ = resolve.resolve(repo, {}, auto=True,
+                               cache={"repos": [{"identity": "github.com/o/x", "description": "d"}]})
+    assert facts["clone_url"] == "https://github.com/o/x.git"
+
+    # render: uncloned card gets a Clone button (not Edit/Delete)
+    tmp = tempfile.mkdtemp()
+    generate.DATA = tmp
+    generate.BASELINE = os.path.join(tmp, "b.json")
+    generate.INDEX = os.path.join(tmp, "i.html")
+    json.dump({}, open(generate.BASELINE, "w"))
+    json.dump({"synced_at": 1, "repos": [
+        {"identity": "github.com/o/ghost", "remote": "https://github.com/o/ghost.git",
+         "name": "ghost", "description": "d", "html_url": "https://github.com/o/ghost", "block": {}}]},
+        open(os.path.join(tmp, "github_cache.json"), "w"))
+    generate.main()
+    h = open(generate.INDEX).read()
+    ghost_view = h.split('id="v-ghost"')[1].split("</div>")[0]
+    assert "ghClone(" in h and ">Clone<" in h and "github.com/o/ghost.git" in h
+    assert "openEditor" not in ghost_view          # uncloned → no edit
+
+
 if __name__ == "__main__":
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for t in tests:

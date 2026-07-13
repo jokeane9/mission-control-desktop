@@ -377,9 +377,15 @@ def main():
         for label, url in maps:
             tabs.append(f'<span class="tab" onclick="tab(this,\'{esc(url)}\')">{esc(label)} map</span>')
             panes.append('<div class="pane"><iframe data-src="' + esc(url) + '"></iframe></div>')
+        if pr["path"]:                              # cloned repo → edit/delete
+            dbtns = (f'<button class="dbtn" onclick="openEditor(\'{n}\')">Edit</button>'
+                     f'<button class="dbtn danger" onclick="removeProject(\'{n}\')">Delete</button>')
+        else:                                       # uncloned GitHub repo → clone
+            cu = esc(p.get("clone_url", ""))
+            dbtns = f'<button class="dbtn" onclick="ghClone(\'{cu}\')">Clone</button>' if cu else ""
         details.append(f'''<div class="view" id="v-{n}">
   <div class="dhead"><span class="dname">{n}</span><span class="dthesis">{esc(p.get("thesis", ""))}{prov_mark(pr["prov"], "thesis")}</span>
-    <span class="dbtns editonly"><button class="dbtn" onclick="openEditor('{n}')">Edit</button><button class="dbtn danger" onclick="removeProject('{n}')">Delete</button></span></div>
+    <span class="dbtns editonly">{dbtns}</span></div>
   <div class="tabs">{"".join(tabs)}</div>
   {"".join(panes)}
 </div>''')
@@ -516,6 +522,7 @@ body.nobridge .editonly{display:none}
 .btn-save:disabled{opacity:.6;cursor:default}
 .ghstat{padding:8px 14px 0;font-size:10px;color:var(--muted);line-height:1.5}
 .ghstat b{color:var(--ink)}
+.ghsub{color:var(--faint);margin:1px 0 3px}
 .ghstat a{color:var(--blue);cursor:pointer}
 .ghstat a:hover{text-decoration:underline}
 </style>
@@ -664,17 +671,37 @@ function removeProject(name){
 document.addEventListener('keydown',function(e){if(e.key==='Escape'){closeEditor();closeGitHub();}});
 
 // --- GitHub connect (P3.1, pywebview only). Token → OS keychain via Python. ---
+function ghAgo(ts){                                  // unix seconds → "3m ago"
+  if(!ts)return '';
+  var s=Math.max(0,Math.floor(Date.now()/1000-ts));
+  if(s<60)return 'just now';
+  if(s<3600)return Math.floor(s/60)+'m ago';
+  if(s<86400)return Math.floor(s/3600)+'h ago';
+  return Math.floor(s/86400)+'d ago';
+}
 function ghRefresh(){
   if(!(bridge()&&window.pywebview.api.github_status))return;
   window.pywebview.api.github_status().then(function(s){
     var box=document.getElementById('ghbox');if(!box)return;
     if(s&&s.connected){
-      box.innerHTML='<div class="ghstat">GitHub · <b>'+(s.login||'connected')+'</b><br>'+
-        '<a onclick="ghSync()">sync repos</a> · <a onclick="ghDisconnect()">disconnect</a></div>';
+      var sub = s.synced_at
+        ? (s.repo_count||0)+' repos · '+ghAgo(s.synced_at)
+        : 'not synced yet';
+      box.innerHTML='<div class="ghstat">GitHub · <b>'+(s.login||'connected')+'</b>'+
+        '<div class="ghsub">'+sub+'</div>'+
+        '<a onclick="ghSync()">sync</a> · <a onclick="ghDisconnect()">disconnect</a></div>';
     } else {
       box.innerHTML='<button class="addbtn" onclick="openGitHub()">Connect GitHub</button>';
     }
   }).catch(function(){});
+}
+function ghClone(url){
+  if(!(bridge()&&window.pywebview.api.github_clone))return;
+  if(!confirm('Clone '+url+' into your first roots folder?'))return;
+  window.pywebview.api.github_clone(url).then(function(r){
+    if(r&&r.ok){location.reload();}
+    else{alert((r&&r.error)||'Clone failed.');}
+  }).catch(function(){alert('Clone failed.');});
 }
 function ghSync(){
   if(!(bridge()&&window.pywebview.api.github_sync))return;

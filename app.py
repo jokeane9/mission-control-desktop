@@ -9,6 +9,7 @@ Packaged as "Mission Control.app" — see build_app.sh.
 import os, sys, threading, time, subprocess, webbrowser, webview
 import webview.menu as wm
 import generate            # sibling: main(), INDEX, resource_path()
+import resolve             # sibling: load_github_cache() for sync status
 import github_auth         # sibling: GitHub token (keychain) — P3.1
 import github_sync as ghsync  # sibling: list repos → github_cache.json — P3.2
 
@@ -52,9 +53,32 @@ class Api:
     # --- GitHub (P3.1): token lives in the OS keychain, never in config ---
     def github_status(self):
         try:
-            return github_auth.status()
+            s = github_auth.status()
+            if s.get("connected"):     # attach sync info from the cache (P3.3)
+                cache = resolve.load_github_cache(ghsync.cache_path())
+                s["synced_at"] = cache.get("synced_at")
+                s["repo_count"] = len(cache.get("repos", []))
+            return s
         except Exception as e:
             return {"connected": False, "login": None, "error": str(e)}
+
+    def github_clone(self, url):
+        """Clone an uncloned GitHub repo into the first configured `roots` folder,
+        then regenerate so it shows up as a local card (P3.3)."""
+        try:
+            roots = generate.load_config().get("roots", [])
+            if not roots:
+                return {"ok": False, "error": "Add a folder to \"roots\" first to clone into."}
+            dest = os.path.expanduser(roots[0])
+            os.makedirs(dest, exist_ok=True)
+            r = subprocess.run(["git", "clone", url], cwd=dest,
+                               capture_output=True, text=True, timeout=300)
+            if r.returncode != 0:
+                return {"ok": False, "error": (r.stderr or "git clone failed").strip()[:200]}
+            generate.main()
+            return {"ok": True}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
 
     def github_connect(self, token):
         try:
