@@ -31,6 +31,8 @@ jobs:
         run: python tests/test_autopopulate.py
       - name: GitHub auth tests
         run: python tests/test_github_auth.py
+      - name: GitHub sync tests
+        run: python tests/test_github_sync.py
 
   build:
     # The real guardrail: does it still package? PRs only — heavy.

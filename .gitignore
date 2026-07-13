@@ -12,3 +12,5 @@ packaging/windows/MicrosoftEdgeWebview2Setup.exe
 *.app/
 .env
 packaging/winget/out/
+github_cache.json
+github.json
