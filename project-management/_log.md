@@ -63,3 +63,32 @@ API (not git push); launch unsigned, add signing later.
   the web UI). Add issues #7–#13 to it.
 - Rotate `TAP_GITHUB_TOKEN` (exposed in chat during setup).
 - SignPath enrollment (issue #7).
+
+---
+
+## 2026-07-12 (session 3) — Auto-populate epic + merge sweep
+
+**What happened:** Built auto-populate P1→P3.2 (each its own branch/PR, verified,
+merged) and cleared a backlog of stale Dependabot PRs.
+
+- Config editor (#13→v1.1.0). Auto-populate: P1 discovery+resolver (#16),
+  provenance badge (#17), P2 auto-maps (#18), P3.1 GitHub auth/keychain (#19),
+  P3.2 GitHub sync (#20). Design docs: schema / resolver / P1 & P3 build plans.
+- Architecture that held throughout: the **sync/cache boundary** — network + the
+  GitHub token live only in github_sync.py / github_auth.py (app-side);
+  generate.py + resolve.py stay stdlib + offline, reading a cache file.
+- **Merge sweep:** 5 Dependabot PRs (#2–#6) had accumulated unnoticed +
+  P3.2 (#20). All green → merged all 6. main clean, 0 open PRs, stale branches
+  deleted.
+
+**Deferred by decision:** P4 (LLM extraction). See ROADMAP Later.
+
+**RESUME HERE (next session):**
+1. **Real-token GitHub sync check** — connect a PAT in the app, "sync repos",
+   confirm it populates (the one unverified P3.2 path).
+2. **Cut v1.2.0** — main is well ahead of the v1.1.0 tag. First release to
+   exercise the Dependabot release.yml action bumps — watch that run.
+3. P3.3 (sync UI polish), then Windows signing (#7) / winget (#8) when enrolled.
+
+**Still open owner-only:** Project board (needs `project` scope), rotate
+`TAP_GITHUB_TOKEN`, SignPath enrollment.

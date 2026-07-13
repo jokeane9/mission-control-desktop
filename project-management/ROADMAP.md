@@ -7,37 +7,47 @@ items, reorder if priorities shifted, add anything new. Now / Next / Later.
 
 ## Now
 
-- [ ] Nothing in flight. Baseline shipped: v1.0.2 live on Mac + Windows, Homebrew
-      tap auto-bumping.
+- [ ] Nothing in flight. `main` clean, 0 open PRs. Auto-populate P1→P3.2 all
+      merged but **not yet released** (main is ahead of the v1.1.0 tag).
 
 ## Next
 
+- [ ] **Verify GitHub sync with a real token** — the one deferred P3.2 check:
+      connect a fine-grained PAT (Metadata + Contents: read), hit "sync repos",
+      confirm owned repos populate and uncloned ones show "not cloned". (tonight)
+- [ ] **Cut v1.2.0** — release the auto-populate + config-editor + GitHub work
+      (`git tag v1.2.0 && git push --tags`). ⚠ First release exercising the
+      Dependabot `release.yml` action bumps (upload/download-artifact, gh-release,
+      setup-python, checkout) — watch that run; one-line reverts if any break.
+- [ ] **P3.3 — GitHub sync UI polish** ([#15](https://github.com/jokeane9/mission-control-desktop/issues/15)) —
+      last-synced timestamp, a "clone" affordance on uncloned cards, sync progress.
 - [ ] **Windows code signing** ([#7](https://github.com/jokeane9/mission-control-desktop/issues/7)) —
-      enroll in SignPath Foundation (free OSS), add the signing step to
-      `release.yml` before the release upload. Kills SmartScreen.
-      (`platform:windows`, `signing`)
+      SignPath enrollment → activates the already-wired step. (`platform:windows`, `signing`)
 - [ ] **winget listing** ([#8](https://github.com/jokeane9/mission-control-desktop/issues/8)) —
-      PR a manifest to microsoft/winget-pkgs. Do *after* signing (winget rejects
-      low-reputation unsigned installers). (`platform:windows`, `packaging`)
+      after signing. (`platform:windows`, `packaging`)
 
 ## Later
 
-- [ ] **Auto-populate projects from repos** ([#15](https://github.com/jokeane9/mission-control-desktop/issues/15)) —
-      the big one. Read each repo's CLAUDE.md/AGENTS.md/README + metadata to
-      fill cards automatically; `baseline.json` becomes overrides. Local scan is
-      offline (on-brand); GitHub sync + LLM extraction are opt-in. Phased P1–P4.
-- [ ] **macOS notarization** — join Apple Developer Program ($99/yr), add the 6
-      signing secrets. CI already supports it. (`platform:mac`, `signing`)
-- [ ] **Tahoe icon polish** — author a `.icon` (Icon Composer) + ship `Assets.car`
-      so the icon isn't shrunk inside the generic glass tile on macOS 26. Cosmetic.
-      (`platform:mac`)
+- [ ] **P4 — LLM extraction** ([#15](https://github.com/jokeane9/mission-control-desktop/issues/15)) —
+      feed a repo's CLAUDE.md to Claude to distill card fields for repos without a
+      structured block. Opt-in, needs an API key + disclosure. **Deferred by decision.**
+- [ ] **macOS notarization** — Apple Developer Program ($99/yr) + 6 secrets.
+      CI ready. (`platform:mac`, `signing`)
+- [ ] **Tahoe icon polish** — `.icon` (Icon Composer) + `Assets.car` for macOS 26. Cosmetic. (`platform:mac`)
 - [ ] **Blog launch post** — the open-source / donation announcement.
-- [ ] **Name decision** — "Mission Control" collides with Apple's window manager;
-      consider a distinct launch name before wide promotion.
+- [ ] **Name decision** — "Mission Control" collides with Apple's window manager.
+
 ---
 
 ## Completed
 
+- [x] 2026-07-12 — Auto-populate epic (#15), P1→P3.2 merged: local discovery +
+      resolver (#16), provenance badge (#17), P2 auto-maps (#18), P3.1 GitHub
+      auth — keychain token (#19), P3.2 GitHub sync — repos→cache→cards incl.
+      uncloned (#20). Local scan offline; GitHub opt-in; token/network stay out
+      of the render path. (P4 LLM extraction deferred.)
+- [x] 2026-07-12 — Merge sweep: cleared 5 stale Dependabot PRs (#2–#6) +
+      P3.2 (#20); main clean, 0 open PRs
 - [x] 2026-07-12 — In-app config editor (#13), shipped in v1.1.0 — add/edit/
       delete projects from a form; verified end-to-end in the real app
 - [x] 2026-07-12 — PM + CI/CD scaffolding: CLAUDE.md, project-management/ docs,
