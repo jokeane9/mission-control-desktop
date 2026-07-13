@@ -7,7 +7,8 @@ Run:  ./.venv/bin/python app.py
 Packaged as "Mission Control.app" — see build_app.sh.
 """
 import os, sys, threading, time, webview
-import generate  # sibling: main(), INDEX, resource_path()
+import generate     # sibling: main(), INDEX, resource_path()
+import github_auth  # sibling: GitHub token (keychain) — P3.1
 
 INDEX = generate.INDEX
 ICON = generate.resource_path("icon.icns")
@@ -41,6 +42,25 @@ class Api:
             generate.delete_project(name)
             generate.main()
             return {"ok": True, "error": ""}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    # --- GitHub (P3.1): token lives in the OS keychain, never in config ---
+    def github_status(self):
+        try:
+            return github_auth.status()
+        except Exception as e:
+            return {"connected": False, "login": None, "error": str(e)}
+
+    def github_connect(self, token):
+        try:
+            return github_auth.connect(token)
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def github_disconnect(self):
+        try:
+            return github_auth.disconnect()
         except Exception as e:
             return {"ok": False, "error": str(e)}
 

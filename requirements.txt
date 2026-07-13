@@ -1,2 +1,3 @@
 pywebview>=6.0
 rumps>=0.4 ; sys_platform == "darwin"
+keyring>=25   # OS keychain for the GitHub token (app-side only; not used by generate.py)
