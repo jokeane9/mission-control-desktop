@@ -372,7 +372,8 @@ def resolve(repo, cfg, auto=True, cache=None):
     facts["arch"] = facts.get("arch") or (
         _first_existing(path, ["ARCHITECTURE.md", "CLAUDE.md", "README.md"]) if path else "")
     facts["path"] = path
-    facts["github_url"] = gh.get("html_url", "")   # for the uncloned-repo link
+    facts["github_url"] = gh.get("html_url", "")   # uncloned-repo link
+    facts["clone_url"] = gh.get("remote", "")      # uncloned-repo Clone action
     return facts, prov
 
 
