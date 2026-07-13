@@ -6,6 +6,7 @@ Design language matches codebase-viz/vizstack (GitHub-dark, SF Mono).
 """
 import json, subprocess, os, sys, html, datetime, time, shutil, webbrowser
 from pathlib import Path
+import resolve  # sibling: discover() + resolve() — offline auto-populate (P1)
 
 APP_NAME = "Mission Control"
 FROZEN = getattr(sys, "frozen", False)          # True inside a PyInstaller build
@@ -250,18 +251,23 @@ def rows_html(p, g, path):
 def main():
     cfg = load_config()
     projects, totals = [], {"dirty": 0, "unmerged": 0, "ahead": 0, "attn": 0}
-    for p in cfg.get("projects", []):
-        raw_path = p.get("path", "")
-        path = os.path.expanduser(raw_path) if raw_path else ""
-        if not path or not os.path.isdir(os.path.join(path, ".git")):
+    # P1 auto-populate: discover repos (baseline entries + scanned `roots`) and
+    # resolve each card's facts from layered offline sources. baseline.json's
+    # explicit values always win; gaps get filled from the repo itself.
+    auto = bool(cfg.get("roots"))   # auto-fill is opt-in: only when roots is set
+    for repo in resolve.discover(cfg):
+        path = repo["path"]
+        facts, prov = resolve.resolve(repo, cfg, auto=auto)
+        if facts.get("hidden"):
             continue
         g = collect(path)
-        maps = build_viz(p["name"], path, p, cfg.get("tools", {}))
+        maps = build_viz(facts["name"], path, facts, cfg.get("tools", {}))
         attn = g["dirty"] or g["unmerged"] or g["stashes"] or g["ahead"] != "0"
         totals["dirty"] += g["dirty"]; totals["unmerged"] += g["unmerged"]
         totals["ahead"] += int(g["ahead"]) if g["ahead"].isdigit() else 0
         totals["attn"] += 1 if attn else 0
-        projects.append({"p": p, "g": g, "maps": maps, "path": path, "attn": attn})
+        projects.append({"p": facts, "g": g, "maps": maps, "path": path,
+                         "attn": attn, "prov": prov})
 
     esc = html.escape
     side, cards, details = [], [], []
@@ -298,10 +304,10 @@ def main():
         cards.append(
             '<div class="card" style="cursor:default"><div class="ctop">'
             '<span class="cname">No projects yet</span></div>'
-            '<div class="thesis">Click <b>＋ Add project</b> in the sidebar to add '
-            'one (needs a name and a path to a local git repo), or edit the config '
-            f'file directly:<br><code style="font-size:11px">{esc(BASELINE)}</code>'
-            '</div></div>')
+            '<div class="thesis">Click <b>＋ Add project</b> in the sidebar, or add '
+            'a folder to scan under <code>"roots"</code> in the config to '
+            f'auto-discover repos:<br><code style="font-size:11px">{esc(BASELINE)}'
+            '</code></div></div>')
 
     now_dt = datetime.datetime.now()
     now = now_dt.strftime("%a %b %d · %H:%M")
@@ -565,7 +571,7 @@ document.addEventListener('keydown',function(e){if(e.key==='Escape')closeEditor(
                .replace("%%NAMES%%", json.dumps([pr["p"]["name"] for pr in projects]))
                .replace("%%FIELDS%%", json.dumps(PROJECT_FIELDS))
                .replace("%%PROJECTS_RAW%%",
-                        json.dumps(cfg.get("projects", [])).replace("</", "<\\/")))
+                        json.dumps([pr["p"] for pr in projects]).replace("</", "<\\/")))
     page = page.replace("⌘", MOD)   # platform shortcut labels (⌘ vs Ctrl+)
     out = INDEX
     open(out, "w", encoding="utf-8").write(page)

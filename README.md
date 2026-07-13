@@ -57,6 +57,18 @@ The app creates a starter config on first launch:
 Add one entry per project — a `name`, a `path` to a local git repo, and
 whatever facts you want on the card — then hit **Refresh git** (⌘R / Ctrl+R).
 
+**Or let it find your repos.** Add folders to scan under `"roots"` and Mission
+Control auto-discovers every git repo inside them, populating each card from the
+repo itself — its `CLAUDE.md`/`AGENTS.md`, `README`, or `package.json`. Anything
+you set in `baseline.json` still wins; auto-fill only fills the gaps. A repo can
+describe its own card exactly with a `.mission-control.json` (or a
+`mission-control:` block in `CLAUDE.md`) — see
+[the schema](project-management/autopopulate-schema.md).
+
+```jsonc
+{ "roots": ["~/code", "~/work"], "projects": [ /* overrides */ ] }
+```
+
 ```jsonc
 {
   "projects": [
