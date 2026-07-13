@@ -496,6 +496,10 @@ body.nobridge .editonly{display:none}
 .btn-save{background:#1f6feb;border-color:#1f6feb;color:#fff;font-weight:700}
 .btn-save:hover{background:#2a7bff}
 .btn-save:disabled{opacity:.6;cursor:default}
+.ghstat{padding:8px 14px 0;font-size:10px;color:var(--muted);line-height:1.5}
+.ghstat b{color:var(--ink)}
+.ghstat a{color:var(--blue);cursor:pointer}
+.ghstat a:hover{text-decoration:underline}
 </style>
 <body class="nobridge">
 <div class="app">
@@ -505,6 +509,7 @@ body.nobridge .editonly{display:none}
     <div class="shead">Projects (%%COUNT%%)</div>
     %%SIDE%%
     <button class="addbtn editonly" onclick="openEditor()">＋ Add project</button>
+    <div class="editonly" id="ghbox"></div>
   </div>
   <div class="main">
     <div class="view on" id="v-overview"><div class="grid">%%CARDS%%</div></div>
@@ -519,6 +524,19 @@ body.nobridge .editonly{display:none}
   <div class="factions">
     <button class="btn-cancel" onclick="closeEditor()">Cancel</button>
     <button class="btn-save" id="editorsave" onclick="submitEditor()">Save</button>
+  </div>
+</div></div>
+<div class="modal" id="ghmodal" onclick="if(event.target===this)closeGitHub()"><div class="sheet">
+  <h3>Connect GitHub</h3>
+  <div class="field"><label>Fine-grained token <span class="req">*</span></label>
+    <input type="password" id="ghtoken" spellcheck="false" placeholder="github_pat_…"></div>
+  <div style="font-size:11px;color:var(--muted);line-height:1.5;margin-bottom:8px">
+    Create one with <b>Metadata: read</b> + <b>Contents: read</b> at
+    github.com/settings/tokens. It's stored in your OS keychain — never in the config file.</div>
+  <div class="ferr" id="gherr"></div>
+  <div class="factions">
+    <button class="btn-cancel" onclick="closeGitHub()">Cancel</button>
+    <button class="btn-save" id="ghsave" onclick="ghConnect()">Connect</button>
   </div>
 </div></div>
 <script>
@@ -579,7 +597,7 @@ document.addEventListener('keydown',function(e){
   // reveal Add/Edit/Delete controls only when the bridge exists (packaged app);
   // in a plain browser they'd have nothing to write to. Dropping the body class
   // lets each control fall back to its natural display.
-  function reveal(){document.body.classList.remove('nobridge');}
+  function reveal(){document.body.classList.remove('nobridge');ghRefresh();}
   if(window.pywebview&&window.pywebview.api){reveal();}
   else{window.addEventListener('pywebviewready',reveal);}
 })();
@@ -625,7 +643,44 @@ function removeProject(name){
   if(!(bridge()&&window.pywebview.api.delete_project))return;
   window.pywebview.api.delete_project(name).then(function(r){if(r&&r.ok)location.reload();});
 }
-document.addEventListener('keydown',function(e){if(e.key==='Escape')closeEditor();});
+document.addEventListener('keydown',function(e){if(e.key==='Escape'){closeEditor();closeGitHub();}});
+
+// --- GitHub connect (P3.1, pywebview only). Token → OS keychain via Python. ---
+function ghRefresh(){
+  if(!(bridge()&&window.pywebview.api.github_status))return;
+  window.pywebview.api.github_status().then(function(s){
+    var box=document.getElementById('ghbox');if(!box)return;
+    if(s&&s.connected){
+      box.innerHTML='<div class="ghstat">GitHub · <b>'+(s.login||'connected')+
+        '</b> · <a onclick="ghDisconnect()">disconnect</a></div>';
+    } else {
+      box.innerHTML='<button class="addbtn" onclick="openGitHub()">Connect GitHub</button>';
+    }
+  }).catch(function(){});
+}
+function openGitHub(){
+  document.getElementById('gherr').textContent='';
+  document.getElementById('ghtoken').value='';
+  document.getElementById('ghmodal').classList.add('on');
+  document.getElementById('ghtoken').focus();
+}
+function closeGitHub(){document.getElementById('ghmodal').classList.remove('on');}
+function ghConnect(){
+  var tok=document.getElementById('ghtoken').value.trim(),err=document.getElementById('gherr');
+  if(!tok){err.textContent='Paste a token.';return;}
+  if(!(bridge()&&window.pywebview.api.github_connect)){err.textContent='Needs the desktop app.';return;}
+  var b=document.getElementById('ghsave');b.disabled=true;b.textContent='Connecting…';
+  window.pywebview.api.github_connect(tok).then(function(r){
+    b.disabled=false;b.textContent='Connect';
+    if(r&&r.ok){closeGitHub();ghRefresh();}
+    else{err.textContent=(r&&r.error)||'Connection failed.';}
+  }).catch(function(){b.disabled=false;b.textContent='Connect';err.textContent='Connection failed.';});
+}
+function ghDisconnect(){
+  if(!confirm('Disconnect GitHub? This removes the token from your keychain.'))return;
+  if(!(bridge()&&window.pywebview.api.github_disconnect))return;
+  window.pywebview.api.github_disconnect().then(ghRefresh);
+}
 </script>
 </body></html>"""
 

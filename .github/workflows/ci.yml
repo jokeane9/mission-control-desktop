@@ -29,6 +29,8 @@ jobs:
           test -s index.html && echo "index.html rendered ($(wc -c < index.html) bytes)"
       - name: Auto-populate tests
         run: python tests/test_autopopulate.py
+      - name: GitHub auth tests
+        run: python tests/test_github_auth.py
 
   build:
     # The real guardrail: does it still package? PRs only — heavy.
