@@ -221,11 +221,36 @@ def chips(g):
         out.append(c(f'↓{g["behind"]} behind', "blue"))
     return "".join(out)
 
-def rows_html(p, g, path):
+# Provenance badge labels: (visible text, tooltip). Heuristic values are marked
+# "guess" in amber to signal they were inferred from prose, not stated.
+_PROV_LABEL = {
+    "block":     ("auto",  "from a .mission-control / CLAUDE.md block"),
+    "metadata":  ("auto",  "from package.json / git remote"),
+    "heuristic": ("guess", "guessed from CLAUDE.md / README prose"),
+    "computed":  ("auto",  "derived (e.g. the folder name)"),
+    "github":    ("auto",  "from GitHub"),
+}
+
+
+def prov_mark(prov, key):
+    """A small 'auto'/'guess' badge for an auto-derived field. Empty for a manual
+    override or when provenance is unavailable — so overridden fields read plain."""
+    src = (prov or {}).get(key)
+    if not src or src == "overrides":
+        return ""
+    label, tip = _PROV_LABEL.get(src, ("auto", "auto-filled"))
+    cls = "prov guess" if src == "heuristic" else "prov"
+    return f'<span class="{cls}" title="{html.escape(tip)}">{label}</span>'
+
+
+def rows_html(p, g, path, prov=None):
     esc = html.escape
-    def row(label, val):
+    def row(label, val, key=None):
+        if not val:
+            return ""
+        mark = prov_mark(prov, key) if key else ""
         return (f'<div class="row"><span class="lbl">{label}</span>'
-                f'<span class="val">{val}</span></div>') if val else ""
+                f'<span class="val">{val}{mark}</span></div>')
     prod, prod_note = p.get("prod", ""), p.get("prod_note", "")
     if prod:
         site = f'<a href="{esc(prod)}" target="_blank">{esc(prod.replace("https://",""))}</a>'
@@ -239,14 +264,14 @@ def rows_html(p, g, path):
     outline = arch_outline(path, arch_rel)
     archval = f'{esc(outline)} <span class="sub">·</span> {arch}' if outline and arch else arch
     focus = p.get("focus", "")
-    return (row("Site", site)
-            + (row("Email", esc(p.get("email", ""))) if p.get("email") else "")
-            + row("Dev", esc(p.get("dev", "")))
-            + row("Prod", esc(p.get("prod_env", "")))
-            + row("Stack", esc(p.get("stack", "")))
-            + row("Arch", archval)
+    return (row("Site", site, "prod")
+            + (row("Email", esc(p.get("email", "")), "email") if p.get("email") else "")
+            + row("Dev", esc(p.get("dev", "")), "dev")
+            + row("Prod", esc(p.get("prod_env", "")), "prod_env")
+            + row("Stack", esc(p.get("stack", "")), "stack")
+            + row("Arch", archval, "arch")
             + row("Last", f'<span class="sub">{esc(g["last_msg"])}</span>')
-            + (f'<div class="focus">{row("Focus", esc(focus))}</div>' if focus else ""))
+            + (f'<div class="focus">{row("Focus", esc(focus), "focus")}</div>' if focus else ""))
 
 def main():
     cfg = load_config()
@@ -289,12 +314,12 @@ def main():
         tabs = ['<span class="tab on" onclick="tab(this,null)">overview</span>']
         panes = [f'<div class="pane on"><div class="dcard">'
                  f'<div class="chips" style="margin-bottom:10px">{chips(g)}</div>'
-                 f'{rows_html(p, g, pr["path"])}</div></div>']
+                 f'{rows_html(p, g, pr["path"], pr["prov"])}</div></div>']
         for label, url in maps:
             tabs.append(f'<span class="tab" onclick="tab(this,\'{esc(url)}\')">{esc(label)} map</span>')
             panes.append('<div class="pane"><iframe data-src="' + esc(url) + '"></iframe></div>')
         details.append(f'''<div class="view" id="v-{n}">
-  <div class="dhead"><span class="dname">{n}</span><span class="dthesis">{esc(p.get("thesis", ""))}</span>
+  <div class="dhead"><span class="dname">{n}</span><span class="dthesis">{esc(p.get("thesis", ""))}{prov_mark(pr["prov"], "thesis")}</span>
     <span class="dbtns editonly"><button class="dbtn" onclick="openEditor('{n}')">Edit</button><button class="dbtn danger" onclick="removeProject('{n}')">Delete</button></span></div>
   <div class="tabs">{"".join(tabs)}</div>
   {"".join(panes)}
@@ -375,6 +400,10 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--mono);font
 .val{flex:1;min-width:0;font-family:-apple-system,'Segoe UI','Helvetica Neue',sans-serif;font-size:12.5px}
 .val a{color:var(--blue);text-decoration:none}
 .val a:hover{text-decoration:underline}
+.prov{font-size:8px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;font-family:var(--mono);
+  color:var(--faint);border:1px solid var(--border2);border-radius:3px;padding:0 4px;margin-left:6px;
+  vertical-align:1px;cursor:default}
+.prov.guess{color:var(--amber);border-color:#4d3800}
 .sub{color:var(--muted)}
 .focus{margin-top:10px;border-top:1px solid var(--border);padding-top:4px}
 .statusbar{flex:none;border-top:1px solid var(--border);background:#0f1319;padding:7px 16px;
