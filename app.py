@@ -6,13 +6,16 @@ via pywebview. Distinct from menubar.py (the always-on menu-bar icon).
 Run:  ./.venv/bin/python app.py
 Packaged as "Mission Control.app" — see build_app.sh.
 """
-import os, sys, threading, time, webview
+import os, sys, threading, time, subprocess, webbrowser, webview
+import webview.menu as wm
 import generate            # sibling: main(), INDEX, resource_path()
 import github_auth         # sibling: GitHub token (keychain) — P3.1
 import github_sync as ghsync  # sibling: list repos → github_cache.json — P3.2
 
 INDEX = generate.INDEX
 ICON = generate.resource_path("icon.icns")
+REPO = "https://github.com/jokeane9/mission-control-desktop"
+WINDOW = None            # set in main(); menu handlers drive the page through it
 
 
 class Api:
@@ -112,21 +115,69 @@ def _regen_loop():
             pass
 
 
+def _js(code):
+    """Run JS in the page from a native menu handler (reuses the existing UI
+    actions instead of duplicating them)."""
+    if WINDOW is not None:
+        try:
+            WINDOW.evaluate_js(code)
+        except Exception:
+            pass
+
+
+def _open(target):
+    """Open a file/folder in the OS default handler."""
+    try:
+        if sys.platform == "darwin":
+            subprocess.run(["open", target])
+        elif os.name == "nt":
+            os.startfile(target)            # Windows only
+        else:
+            subprocess.run(["xdg-open", target])
+    except Exception:
+        pass
+
+
+def _menu():
+    """The app's main menu. Every action just surfaces something the dashboard
+    already does — no new behaviour, so nothing here can get out of sync."""
+    return [
+        wm.Menu("File", [
+            wm.MenuAction("New Project…", lambda: _js("openEditor()")),
+            wm.MenuAction("Refresh Git", lambda: _js(
+                "refreshGit(document.getElementById('refreshgit'))")),
+            wm.MenuSeparator(),
+            wm.MenuAction("Open Config File", lambda: _open(generate.BASELINE)),
+            wm.MenuAction("Reveal Data Folder", lambda: _open(generate.DATA)),
+        ]),
+        wm.Menu("GitHub", [
+            wm.MenuAction("Connect…", lambda: _js("openGitHub()")),
+            wm.MenuAction("Sync Repos", lambda: _js("ghSync()")),
+            wm.MenuAction("Disconnect", lambda: _js("ghDisconnect()")),
+        ]),
+        wm.Menu("Help", [
+            wm.MenuAction("Mission Control on GitHub", lambda: webbrowser.open(REPO)),
+            wm.MenuAction("Report an Issue", lambda: webbrowser.open(REPO + "/issues")),
+        ]),
+    ]
+
+
 def main():
+    global WINDOW
     try:
         generate.main()          # fresh git scan + rewrite index.html on launch
     except Exception:
         pass                     # never block the window on a scan hiccup
     _brand_dock()
     threading.Thread(target=_regen_loop, daemon=True).start()
-    webview.create_window(
+    WINDOW = webview.create_window(
         "Mission Control",
         url=f"file://{INDEX}",
         width=1240, height=900,
         min_size=(760, 560),
         js_api=Api(),
     )
-    webview.start()              # blocks; owns the Dock icon + window
+    webview.start(menu=_menu())  # blocks; owns the Dock icon, window + menu bar
 
 
 if __name__ == "__main__":
