@@ -55,7 +55,7 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
         run: ./packaging/build_macos.sh
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with: { name: macos-dmg, path: dist/*.dmg }
 
   windows:
@@ -88,7 +88,7 @@ jobs:
       - name: Upload unsigned installer for SignPath
         if: env.SIGNPATH_API_TOKEN != ''
         id: unsigned
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: windows-unsigned-installer
           path: dist/*-setup.exe
@@ -108,7 +108,7 @@ jobs:
         if: env.SIGNPATH_API_TOKEN == ''
         run: echo "SIGNPATH_API_TOKEN not set — shipping UNSIGNED installer (free path)."
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: windows-build
           path: |
