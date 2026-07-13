@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
-"""Auto-populate resolver (P1) — offline. Discovers local git repos and resolves
+"""Auto-populate resolver — offline, stdlib only. Discovers repos and resolves
 each project's card facts from layered sources, highest priority first:
 
-    overrides (baseline.json)  >  structured block  >  repo metadata  >  heuristics
+    overrides (baseline.json)  >  block  >  repo metadata  >  heuristics  >  github
 
-Stdlib only, no deps (same stance as generate.py). GitHub / LLM sources are later
-phases and are deliberately absent here. See project-management/autopopulate-*.md.
+The github source (P3.2) reads a cache written out-of-band by github_sync.py — no
+network or token here; this module stays offline + stdlib. GitHub repos not cloned
+locally appear as cards with path=None. LLM extraction (P4) is still absent.
+See project-management/autopopulate-*.md.
 """
 import json, os, re, subprocess
 
@@ -167,6 +169,8 @@ def repo_metadata(path):
 def heuristics(path):
     """Conservative prose parse of CLAUDE.md / README.md. When unsure, stay silent
     — a wrong guess is worse than an empty field."""
+    if not path:
+        return {}
     out = {}
     for name in ("CLAUDE.md", "README.md"):
         f = os.path.join(path, name)
@@ -203,21 +207,85 @@ def heuristics(path):
 
 
 def overrides(repo, cfg):
-    """The matching baseline.json entry — the manual override, always highest."""
-    rid = identity(repo)
+    """The matching baseline.json entry — the manual override, always highest.
+    Matched by local path (baseline entries are path-based). Uncloned GitHub
+    repos have no path and so no override in P3.2."""
+    rpath = repo.get("path")
+    if not rpath:
+        return {}
+    rp = os.path.realpath(rpath)
     for p in cfg.get("projects", []):
         pp = p.get("path", "")
-        if pp and identity({"path": os.path.expanduser(pp)}) == rid:
+        if pp and os.path.realpath(os.path.expanduser(pp)) == rp:
             return {k: v for k, v in p.items() if k in PROJECT_KEYS}
     return {}
 
 
+def github(repo, cache):
+    """Facts from the synced GitHub cache (P3.2), matched by identity. Lowest
+    priority — every local source wins. Within this source the fetched block
+    beats GitHub metadata, so an uncloned repo's own block still leads."""
+    if not cache:
+        return {}
+    rid = identity(repo)
+    entry = next((g for g in cache.get("repos", []) if g.get("identity") == rid), None)
+    if not entry:
+        return {}
+    out = {}
+    if entry.get("description"):
+        out["thesis"] = entry["description"]
+    if entry.get("homepage"):
+        out["prod"] = entry["homepage"]
+    if entry.get("topics"):
+        out["tags"] = entry["topics"]
+    out.update(_normalize(entry.get("block") or {}))
+    return {k: v for k, v in out.items()
+            if k in PROJECT_KEYS and v not in (None, "", [], {})}
+
+
+def load_github_cache(path):
+    """Read github_cache.json (written out-of-band by github_sync.py). {} if absent."""
+    try:
+        return json.load(open(path, encoding="utf-8"))
+    except Exception:
+        return {}
+
+
 # --------------------------------------------------------------------------- #
-# Discovery + resolve
+# Identity + discovery + resolve
 # --------------------------------------------------------------------------- #
+def _git_remote(path):
+    try:
+        r = subprocess.run(["git", "-C", path, "config", "--get", "remote.origin.url"],
+                           capture_output=True, text=True, timeout=5)
+        return r.stdout.strip()
+    except Exception:
+        return ""
+
+
+def normalize_remote(url):
+    """Canonical repo id `host/owner/repo` — lowercased, no scheme/user/.git — so
+    a local clone's remote matches a GitHub clone_url for dedup."""
+    if not url:
+        return ""
+    u = url.strip()
+    u = re.sub(r"^git@([^:/]+):", r"\1/", u)   # scp-style ssh → host/path
+    u = re.sub(r"^\w+://", "", u)              # strip scheme
+    u = re.sub(r"^[^@/]+@", "", u)             # strip user@ (ssh:// form)
+    u = u.rstrip("/")
+    if u.endswith(".git"):
+        u = u[:-4]
+    return u.lower()
+
+
 def identity(repo):
+    """Remote (normalized) if the repo has one — bridges local clone ↔ GitHub —
+    else the real local path, else the name. Repos carry a precomputed `remote`."""
+    rem = repo.get("remote")
+    if rem:
+        return rem
     p = repo.get("path")
-    return os.path.realpath(p) if p else (repo.get("remote") or repo.get("name") or "")
+    return os.path.realpath(p) if p else (repo.get("name") or "")
 
 
 def _is_git(path):
@@ -244,39 +312,52 @@ def find_git_dirs(root, max_depth=4):
     return found
 
 
-def discover(cfg):
-    """Candidate repos = baseline entries (order preserved) then scanned roots,
-    deduped by identity. P1 keeps only real local git dirs."""
-    seen, order = set(), []
+def discover(cfg, cache=None):
+    """Candidate repos = baseline entries + scanned roots (local) ∪ synced GitHub
+    repos, deduped by identity (git remote, else path). A GitHub repo already
+    cloned locally merges into the local card (the github source fills its gaps);
+    the rest render as uncloned (path=None)."""
+    seen, local = set(), []
 
-    def add(repo):
+    def add(path):
+        repo = {"path": path, "remote": normalize_remote(_git_remote(path))}
         rid = identity(repo)
         if rid and rid not in seen:
             seen.add(rid)
-            order.append(repo)
+            local.append(repo)
 
     for p in cfg.get("projects", []):
         if p.get("path"):
-            add({"path": os.path.expanduser(p["path"])})
+            add(os.path.expanduser(p["path"]))
     for r in cfg.get("roots", []):
         for path in find_git_dirs(r):
-            add({"path": path})
-    return [r for r in order if _is_git(r["path"])]
+            add(path)
+    result = [r for r in local if _is_git(r["path"])]
+    seen = {identity(r) for r in result}
+    for g in (cache or {}).get("repos", []):
+        rid = g.get("identity") or normalize_remote(g.get("remote", ""))
+        if rid and rid not in seen:
+            seen.add(rid)
+            result.append({"path": None, "remote": rid, "gh": g})
+    return result
 
 
-def resolve(repo, cfg, auto=True):
+def resolve(repo, cfg, auto=True, cache=None):
     """Return (facts, provenance). Per field: first non-empty source wins.
 
-    `auto` gates the repo-reading sources (block/metadata/heuristics). main()
-    passes auto=True only when `roots` is configured, so a user who hasn't opted
-    into scanning sees no change — baseline overrides only, exactly as before."""
+    `auto` (roots set) gates the local file sources; `cache` (GitHub synced) gates
+    the github source. An uncloned repo has path=None — only overrides + github
+    apply. With neither opted in, it's baseline overrides only, as before."""
+    path = repo.get("path")
     sources = [("overrides", overrides(repo, cfg))]
-    if auto:
+    if auto and path:
         sources += [
-            ("block", read_block(repo["path"])),
-            ("metadata", repo_metadata(repo["path"])),
-            ("heuristic", heuristics(repo["path"])),
+            ("block", read_block(path)),
+            ("metadata", repo_metadata(path)),
+            ("heuristic", heuristics(path)),
         ]
+    if cache:
+        sources.append(("github", github(repo, cache)))
     facts, prov = {}, {}
     for key in PROJECT_KEYS:
         for name, values in sources:
@@ -284,11 +365,14 @@ def resolve(repo, cfg, auto=True):
             if v not in (None, "", [], {}):
                 facts[key], prov[key] = v, name
                 break
-    facts.setdefault("name", os.path.basename(repo["path"].rstrip(os.sep)))
+    gh = repo.get("gh") or {}
+    facts.setdefault("name", (os.path.basename(path.rstrip(os.sep)) if path
+                              else gh.get("name")) or "repo")
     prov.setdefault("name", "computed")
-    facts["arch"] = facts.get("arch") or _first_existing(
-        repo["path"], ["ARCHITECTURE.md", "CLAUDE.md", "README.md"])
-    facts["path"] = repo["path"]
+    facts["arch"] = facts.get("arch") or (
+        _first_existing(path, ["ARCHITECTURE.md", "CLAUDE.md", "README.md"]) if path else "")
+    facts["path"] = path
+    facts["github_url"] = gh.get("html_url", "")   # for the uncloned-repo link
     return facts, prov
 
 

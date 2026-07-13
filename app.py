@@ -7,8 +7,9 @@ Run:  ./.venv/bin/python app.py
 Packaged as "Mission Control.app" — see build_app.sh.
 """
 import os, sys, threading, time, webview
-import generate     # sibling: main(), INDEX, resource_path()
-import github_auth  # sibling: GitHub token (keychain) — P3.1
+import generate            # sibling: main(), INDEX, resource_path()
+import github_auth         # sibling: GitHub token (keychain) — P3.1
+import github_sync as ghsync  # sibling: list repos → github_cache.json — P3.2
 
 INDEX = generate.INDEX
 ICON = generate.resource_path("icon.icns")
@@ -58,9 +59,22 @@ class Api:
         except Exception as e:
             return {"ok": False, "error": str(e)}
 
+    def github_sync(self):
+        """Fetch repos → cache, then regenerate so the cards appear."""
+        try:
+            r = ghsync.sync()
+            if r.get("ok"):
+                generate.main()
+            return r
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
     def github_disconnect(self):
         try:
-            return github_auth.disconnect()
+            github_auth.disconnect()
+            ghsync.clear_cache()       # wipe synced data too
+            generate.main()            # GitHub cards vanish
+            return {"ok": True}
         except Exception as e:
             return {"ok": False, "error": str(e)}
 

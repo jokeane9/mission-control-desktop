@@ -247,7 +247,15 @@ def build_viz(name, path, p, cfg_tools, auto=False):
             links.append((label, f"viz/{name}-{kind}.html"))
     return links
 
+# Stand-in git state for an uncloned GitHub repo (no local checkout to scan).
+GIT_UNCLONED = {"branch": "", "dirty": 0, "last_rel": "", "last_msg": "",
+                "behind": "0", "ahead": "0", "unmerged": 0, "stashes": 0,
+                "uncloned": True}
+
+
 def chips(g):
+    if g.get("uncloned"):
+        return '<span class="chip">not cloned</span>'
     def c(text, kind=""):
         return f'<span class="chip {kind}">{html.escape(str(text))}</span>'
     out = [c(g["branch"], "blue" if g["branch"] not in ("main", "master") else "")]
@@ -311,24 +319,34 @@ def rows_html(p, g, path, prov=None):
             + row("Prod", esc(p.get("prod_env", "")), "prod_env")
             + row("Stack", esc(p.get("stack", "")), "stack")
             + row("Arch", archval, "arch")
+            + (row("GitHub", f'<a href="{esc(p["github_url"])}" target="_blank">'
+                             f'{esc(p["github_url"].replace("https://", ""))}</a>')
+               if p.get("github_url") else "")
             + row("Last", f'<span class="sub">{esc(g["last_msg"])}</span>')
             + (f'<div class="focus">{row("Focus", esc(focus), "focus")}</div>' if focus else ""))
 
 def main():
     cfg = load_config()
+    # Read-only cache written out-of-band by github_sync.py (P3.2). {} if not
+    # synced — GitHub work never happens in the render path.
+    gh_cache = resolve.load_github_cache(os.path.join(DATA, "github_cache.json"))
     projects, totals = [], {"dirty": 0, "unmerged": 0, "ahead": 0, "attn": 0}
-    # P1 auto-populate: discover repos (baseline entries + scanned `roots`) and
-    # resolve each card's facts from layered offline sources. baseline.json's
-    # explicit values always win; gaps get filled from the repo itself.
-    auto = bool(cfg.get("roots"))   # auto-fill is opt-in: only when roots is set
-    for repo in resolve.discover(cfg):
-        path = repo["path"]
-        facts, prov = resolve.resolve(repo, cfg, auto=auto)
+    # Discover repos (baseline + scanned `roots` + synced GitHub) and resolve each
+    # card's facts from layered sources. Explicit values always win.
+    auto = bool(cfg.get("roots"))   # local auto-fill is opt-in: only when roots is set
+    for repo in resolve.discover(cfg, gh_cache):
+        path = repo.get("path")
+        facts, prov = resolve.resolve(repo, cfg, auto=auto, cache=gh_cache)
         if facts.get("hidden"):
             continue
-        g = collect(path)
-        maps = build_viz(facts["name"], path, facts, cfg.get("tools", {}), auto=auto)
-        attn = g["dirty"] or g["unmerged"] or g["stashes"] or g["ahead"] != "0"
+        if path:
+            g = collect(path)
+            maps = build_viz(facts["name"], path, facts, cfg.get("tools", {}), auto=auto)
+        else:                                           # uncloned GitHub repo
+            g = dict(GIT_UNCLONED)
+            maps = []
+        attn = (not g.get("uncloned")
+                and (g["dirty"] or g["unmerged"] or g["stashes"] or g["ahead"] != "0"))
         totals["dirty"] += g["dirty"]; totals["unmerged"] += g["unmerged"]
         totals["ahead"] += int(g["ahead"]) if g["ahead"].isdigit() else 0
         totals["attn"] += 1 if attn else 0
@@ -651,12 +669,21 @@ function ghRefresh(){
   window.pywebview.api.github_status().then(function(s){
     var box=document.getElementById('ghbox');if(!box)return;
     if(s&&s.connected){
-      box.innerHTML='<div class="ghstat">GitHub · <b>'+(s.login||'connected')+
-        '</b> · <a onclick="ghDisconnect()">disconnect</a></div>';
+      box.innerHTML='<div class="ghstat">GitHub · <b>'+(s.login||'connected')+'</b><br>'+
+        '<a onclick="ghSync()">sync repos</a> · <a onclick="ghDisconnect()">disconnect</a></div>';
     } else {
       box.innerHTML='<button class="addbtn" onclick="openGitHub()">Connect GitHub</button>';
     }
   }).catch(function(){});
+}
+function ghSync(){
+  if(!(bridge()&&window.pywebview.api.github_sync))return;
+  var box=document.getElementById('ghbox');
+  box.innerHTML='<div class="ghstat">GitHub · syncing…</div>';
+  window.pywebview.api.github_sync().then(function(r){
+    if(r&&r.ok){location.reload();}                 // regenerated with GitHub cards
+    else{ghRefresh();if(r&&r.error)alert('Sync failed: '+r.error);}
+  }).catch(function(){ghRefresh();});
 }
 function openGitHub(){
   document.getElementById('gherr').textContent='';
