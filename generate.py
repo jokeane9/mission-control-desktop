@@ -175,23 +175,64 @@ def arch_outline(path, arch_rel, limit=4):
         return ""
     return " · ".join(heads)
 
-def build_viz(name, path, p, cfg_tools):
-    """Optional architecture/pipeline maps. Tool paths come from the config's
-    "tools" section; projects that don't set viz_* (or users without the tools
-    installed) simply get no map tabs."""
+def detect_viz_app(path):
+    """vizstack maps Remix/Next apps. Detect one cheaply from package.json deps
+    or a routes dir; return '.' (the app root) or None."""
+    pj = os.path.join(path, "package.json")
+    if os.path.isfile(pj):
+        try:
+            d = json.load(open(pj, encoding="utf-8"))
+            deps = {**d.get("dependencies", {}), **d.get("devDependencies", {})}
+            if any(k == "next" or k == "remix" or k.startswith("@remix-run/")
+                   for k in deps):
+                return "."
+        except Exception:
+            pass
+    if os.path.isdir(os.path.join(path, "app", "routes")):   # Remix convention
+        return "."
+    return None
+
+
+def detect_viz_pipeline(path):
+    """agentviz maps Python LLM/agent pipelines. Detect one from dep manifests
+    mentioning an LLM SDK; return '.' or None."""
+    for f in ("requirements.txt", "pyproject.toml", "setup.py"):
+        p = os.path.join(path, f)
+        if os.path.isfile(p):
+            try:
+                txt = open(p, encoding="utf-8", errors="ignore").read().lower()
+                if any(s in txt for s in ("openai", "anthropic", "langchain")):
+                    return "."
+            except Exception:
+                pass
+    return None
+
+
+def _viz_plan(path, p, cfg_tools, auto):
+    """Which viz tools to run: {kind: (cmd, target)}. A target comes from explicit
+    config (viz_app/viz_pipeline) or, when `auto`, from detection. Tools absent
+    from `cfg_tools` or missing on disk are skipped."""
+    plan = {}
     vizstack = os.path.expanduser(cfg_tools.get("vizstack", ""))
-    agentviz = os.path.expanduser(cfg_tools.get("agentviz", ""))
-    tools = {}
     if vizstack and os.path.isfile(vizstack):
-        tools["app"] = (["node", vizstack], p.get("viz_app"))
+        target = p.get("viz_app") or (detect_viz_app(path) if auto else None)
+        if target:
+            plan["app"] = (["node", vizstack], target)
+    agentviz = os.path.expanduser(cfg_tools.get("agentviz", ""))
     if agentviz and os.path.isfile(agentviz):
-        py = shutil.which("python3") or shutil.which("python") or "python3"
-        tools["pipeline"] = ([py, agentviz], p.get("viz_pipeline"))
+        target = p.get("viz_pipeline") or (detect_viz_pipeline(path) if auto else None)
+        if target:
+            py = shutil.which("python3") or shutil.which("python") or "python3"
+            plan["pipeline"] = ([py, agentviz], target)
+    return plan
+
+
+def build_viz(name, path, p, cfg_tools, auto=False):
+    """Architecture/pipeline map tabs. Targets are explicit (viz_app/viz_pipeline)
+    or auto-detected when `auto` is on; users without the tools get no map tabs."""
     links = []
     os.makedirs(os.path.join(DATA, "viz"), exist_ok=True)
-    for kind, (cmd, target) in tools.items():
-        if not target:
-            continue
+    for kind, (cmd, target) in _viz_plan(path, p, cfg_tools, auto).items():
         out = os.path.join(DATA, "viz", f"{name}-{kind}.html")
         stale = (not os.path.isfile(out)
                  or time.time() - os.path.getmtime(out) > VIZ_MAX_AGE_H * 3600)
@@ -286,7 +327,7 @@ def main():
         if facts.get("hidden"):
             continue
         g = collect(path)
-        maps = build_viz(facts["name"], path, facts, cfg.get("tools", {}))
+        maps = build_viz(facts["name"], path, facts, cfg.get("tools", {}), auto=auto)
         attn = g["dirty"] or g["unmerged"] or g["stashes"] or g["ahead"] != "0"
         totals["dirty"] += g["dirty"]; totals["unmerged"] += g["unmerged"]
         totals["ahead"] += int(g["ahead"]) if g["ahead"].isdigit() else 0

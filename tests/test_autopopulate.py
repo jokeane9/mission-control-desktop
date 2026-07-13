@@ -113,6 +113,39 @@ def test_integration():
     assert "Zig-Nim-sentinel" not in h, "auto-fill leaked without roots configured"
 
 
+def test_auto_maps():
+    tmp = tempfile.mkdtemp()
+    # detection
+    a = mkrepo(tmp, "nextapp", {"package.json": json.dumps({"dependencies": {"next": "14"}})})
+    assert generate.detect_viz_app(a) == "."
+    r = mkrepo(tmp, "remixapp"); os.makedirs(os.path.join(r, "app", "routes"))
+    assert generate.detect_viz_app(r) == "."
+    plain = mkrepo(tmp, "plain", {"package.json": json.dumps({"dependencies": {"lodash": "1"}})})
+    assert generate.detect_viz_app(plain) is None
+    pipe = mkrepo(tmp, "pipe", {"requirements.txt": "openai==1.0\nrequests\n"})
+    assert generate.detect_viz_pipeline(pipe) == "."
+    assert generate.detect_viz_pipeline(plain) is None
+
+    # _viz_plan: no tools → nothing; explicit works even auto-off; auto detects
+    assert generate._viz_plan(a, {}, {}, True) == {}
+    stub = os.path.join(tmp, "agentviz.py")
+    open(stub, "w").write("import sys; open(sys.argv[2],'w').write('<html>map</html>')\n")
+    tools = {"agentviz": stub}
+    assert "pipeline" not in generate._viz_plan(pipe, {}, tools, False)      # auto off, no explicit
+    assert generate._viz_plan(pipe, {"viz_pipeline": "."}, tools, False)["pipeline"][1] == "."
+    assert generate._viz_plan(pipe, {}, tools, True)["pipeline"][1] == "."   # auto-detected
+
+    # end-to-end: detection → run stub → pipeline tab
+    old = generate.DATA
+    generate.DATA = tmp
+    try:
+        links = generate.build_viz("pipe", pipe, {}, tools, auto=True)
+        assert ("pipeline", "viz/pipe-pipeline.html") in links, links
+        assert os.path.isfile(os.path.join(tmp, "viz", "pipe-pipeline.html"))
+    finally:
+        generate.DATA = old
+
+
 def test_provenance_badge():
     # prov_mark: manual/absent → no badge; heuristic → guess; others → auto
     assert generate.prov_mark({"stack": "overrides"}, "stack") == ""
