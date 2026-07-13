@@ -1,0 +1,121 @@
+#!/usr/bin/env python3
+"""P1 auto-populate tests — resolver unit tests + end-to-end render integration.
+Stdlib only; run: python tests/test_autopopulate.py  (exits non-zero on failure)."""
+import os, sys, json, tempfile, subprocess
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, ROOT)
+import resolve as R
+import generate
+
+
+def mkrepo(base, name, files=None):
+    d = os.path.join(base, name)
+    os.makedirs(d)
+    subprocess.run(["git", "init", "-q", d], check=True)
+    for fn, c in (files or {}).items():
+        open(os.path.join(d, fn), "w").write(c)
+    return d
+
+
+def test_mini_yaml():
+    y = R.parse_mini_yaml('thesis: "hi there"\ntier: major\nhidden: true\nn: 42\n'
+                          'tags: [a, b]\nviz:\n  app: .\n  pipeline: crawl\n')
+    assert y["thesis"] == "hi there" and y["tier"] == "major"
+    assert y["hidden"] is True and y["n"] == 42 and y["tags"] == ["a", "b"]
+    assert y["viz"] == {"app": ".", "pipeline": "crawl"}
+    assert R.parse_mini_yaml("tags:\n  - x\n  - y\n")["tags"] == ["x", "y"]
+
+
+def test_frontmatter():
+    fm = '---\nmission-control:\n  thesis: "shelf"\n  viz:\n    app: .\n---\n# T\nbody'
+    p = R.parse_mini_yaml(R._frontmatter_block(fm, "mission-control"))
+    assert p["thesis"] == "shelf" and p["viz"] == {"app": "."}
+
+
+def test_readers():
+    tmp = tempfile.mkdtemp()
+    rj = mkrepo(tmp, "j", {".mission-control.json": json.dumps(
+        {"thesis": "jt", "viz": {"app": "x"}, "accounts": "me@x"})})
+    b = R.read_block(rj)
+    assert b["thesis"] == "jt" and b["viz_app"] == "x" and b["email"] == "me@x"
+    assert "viz" not in b and "accounts" not in b
+
+    rp = mkrepo(tmp, "p", {"package.json": json.dumps(
+        {"description": "node app", "homepage": "https://p.dev"})})
+    m = R.repo_metadata(rp)
+    assert m["thesis"] == "node app" and m["prod"] == "https://p.dev"
+
+    rh = mkrepo(tmp, "h", {"CLAUDE.md":
+        "# P\n\nDoes a thing.\n\n## Stack\n\nRemix + Postgres\n\nhttps://c.example\n"})
+    h = R.heuristics(rh)
+    assert h["thesis"] == "Does a thing." and h["stack"] == "Remix + Postgres"
+    assert h["prod"] == "https://c.example"
+
+
+def test_resolve_precedence():
+    tmp = tempfile.mkdtemp()
+    r = mkrepo(tmp, "all", {
+        ".mission-control.json": json.dumps({"thesis": "block", "stack": "bs"}),
+        "package.json": json.dumps({"description": "meta", "homepage": "https://m.dev"}),
+        "CLAUDE.md": "# x\n\nheur\n\n## Stack\n\nhs\n"})
+    cfg = {"projects": [{"name": "all", "path": r, "thesis": "OVR"}]}
+    facts, prov = R.resolve({"path": r}, cfg)
+    assert facts["thesis"] == "OVR" and prov["thesis"] == "overrides"
+    assert facts["stack"] == "bs" and prov["stack"] == "block"
+    assert facts["prod"] == "https://m.dev" and prov["prod"] == "metadata"
+    assert facts["name"] == "all" and facts["arch"] == "CLAUDE.md"
+
+
+def test_discover_dedupe_and_ignores():
+    tmp = tempfile.mkdtemp()
+    root = os.path.join(tmp, "root"); os.makedirs(root)
+    r = mkrepo(root, "s", {"README.md": "x"})
+    os.makedirs(os.path.join(r, "node_modules", "pkg", ".git"))
+    cfg = {"roots": [root], "projects": [{"name": "s", "path": r}]}
+    d = R.discover(cfg)
+    assert len(d) == 1 and R.identity(d[0]) == os.path.realpath(r)
+    assert all("node_modules" not in f for f in R.find_git_dirs(root))
+
+
+def test_integration():
+    tmp = tempfile.mkdtemp()
+    root = os.path.join(tmp, "code"); os.makedirs(root)
+    mkrepo(root, "alpha", {"CLAUDE.md": "# A\n\nAlpha does pipelines.\n\n## Stack\n\nZig-Nim-sentinel\n"})
+    mkrepo(root, "beta", {"package.json": json.dumps({"description": "Beta app", "homepage": "https://b.dev"})})
+    mkrepo(root, "gamma", {".mission-control.json": json.dumps({"thesis": "Gamma block", "tier": "tools"})})
+    generate.BASELINE = os.path.join(tmp, "baseline.json")
+    generate.INDEX = os.path.join(tmp, "index.html")
+
+    json.dump({"projects": [], "roots": [root]}, open(generate.BASELINE, "w"))
+    generate.main()
+    h = open(generate.INDEX).read()
+    for n in ["alpha", "beta", "gamma", "Alpha does pipelines.", "Zig-Nim-sentinel", "Beta app", "Gamma block"]:
+        assert n in h, f"missing {n}"
+
+    json.dump({"projects": [{"name": "alpha", "path": os.path.join(root, "alpha"),
+                             "thesis": "OVERRIDE"}], "roots": [root]},
+              open(generate.BASELINE, "w"))
+    generate.main()
+    h = open(generate.INDEX).read()
+    assert "OVERRIDE" in h and "Alpha does pipelines." not in h
+
+    open(os.path.join(root, "gamma", ".mission-control.json"), "w").write(json.dumps({"hidden": True}))
+    generate.main()
+    assert "gamma" not in open(generate.INDEX).read()
+
+    json.dump({"projects": [{"name": "alpha", "path": os.path.join(root, "alpha"), "thesis": "just alpha"}]},
+              open(generate.BASELINE, "w"))
+    generate.main()
+    h = open(generate.INDEX).read()
+    assert "just alpha" in h and "beta" not in h and "gamma" not in h
+    # no roots → auto-fill OFF → alpha's CLAUDE.md stack must NOT leak in
+    assert "Zig-Nim-sentinel" not in h, "auto-fill leaked without roots configured"
+
+
+if __name__ == "__main__":
+    tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
+    for t in tests:
+        t()
+        print(f"ok  {t.__name__}")
+    print(f"\nALL {len(tests)} AUTO-POPULATE TESTS PASS")

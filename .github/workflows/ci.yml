@@ -22,11 +22,13 @@ jobs:
       - name: Lint (real errors only — syntax, undefined names)
         run: ruff check --select=E9,F63,F7,F82 .
       - name: Byte-compile every module
-        run: python -m compileall -q app.py generate.py menubar.py gen_icon.py packaging
+        run: python -m compileall -q app.py generate.py resolve.py menubar.py gen_icon.py packaging
       - name: Render smoke test (generate must produce a page)
         run: |
           python generate.py
           test -s index.html && echo "index.html rendered ($(wc -c < index.html) bytes)"
+      - name: Auto-populate tests
+        run: python tests/test_autopopulate.py
 
   build:
     # The real guardrail: does it still package? PRs only — heavy.

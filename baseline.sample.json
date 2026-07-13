@@ -15,6 +15,7 @@
       "tier": "major"
     }
   ],
+  "roots": [],
   "tools": {
     "vizstack": "",
     "agentviz": ""
