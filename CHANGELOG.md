@@ -7,6 +7,15 @@ platforms.
 
 ## [Unreleased]
 
+## [1.2.1] — 2026-07-13
+### Added
+- GitHub sync status in the sidebar — repo count + relative last-synced time.
+- Uncloned GitHub repos get a **Clone** button that clones into your first
+  `roots` folder and turns them into a normal local card.
+### Changed
+- Connecting GitHub now **auto-syncs**, so your repos appear immediately instead
+  of a confusing "not synced yet" state.
+
 ## [1.2.0] — 2026-07-13
 ### Added
 - **Auto-populate** — point `"roots"` at a folder and Mission Control discovers
@@ -51,7 +60,8 @@ platforms.
 - CI release pipeline: `v*` tag → build both platforms → publish GitHub Release
   → auto-bump the Homebrew cask.
 
-[Unreleased]: https://github.com/jokeane9/mission-control-desktop/compare/v1.2.0...HEAD
+[Unreleased]: https://github.com/jokeane9/mission-control-desktop/compare/v1.2.1...HEAD
+[1.2.1]: https://github.com/jokeane9/mission-control-desktop/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/jokeane9/mission-control-desktop/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/jokeane9/mission-control-desktop/compare/v1.0.2...v1.1.0
 [1.0.2]: https://github.com/jokeane9/mission-control-desktop/compare/v1.0.1...v1.0.2
