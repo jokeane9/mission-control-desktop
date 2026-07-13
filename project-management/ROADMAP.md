@@ -22,6 +22,10 @@ items, reorder if priorities shifted, add anything new. Now / Next / Later.
 
 ## Later
 
+- [ ] **Auto-populate projects from repos** ([#15](https://github.com/jokeane9/mission-control-desktop/issues/15)) —
+      the big one. Read each repo's CLAUDE.md/AGENTS.md/README + metadata to
+      fill cards automatically; `baseline.json` becomes overrides. Local scan is
+      offline (on-brand); GitHub sync + LLM extraction are opt-in. Phased P1–P4.
 - [ ] **macOS notarization** — join Apple Developer Program ($99/yr), add the 6
       signing secrets. CI already supports it. (`platform:mac`, `signing`)
 - [ ] **Tahoe icon polish** — author a `.icon` (Icon Composer) + ship `Assets.car`
@@ -30,12 +34,12 @@ items, reorder if priorities shifted, add anything new. Now / Next / Later.
 - [ ] **Blog launch post** — the open-source / donation announcement.
 - [ ] **Name decision** — "Mission Control" collides with Apple's window manager;
       consider a distinct launch name before wide promotion.
-- [ ] **Config UX** — in-app editing of `baseline.json` instead of hand-editing.
-
 ---
 
 ## Completed
 
+- [x] 2026-07-12 — In-app config editor (#13), shipped in v1.1.0 — add/edit/
+      delete projects from a form; verified end-to-end in the real app
 - [x] 2026-07-12 — PM + CI/CD scaffolding: CLAUDE.md, project-management/ docs,
       guardrail `ci.yml` (lint + render smoke + both-platform build on PRs),
       branch protection on `main` (requires CI), CHANGELOG, Dependabot,
