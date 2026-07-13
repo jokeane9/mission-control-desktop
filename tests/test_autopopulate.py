@@ -113,6 +113,35 @@ def test_integration():
     assert "Zig-Nim-sentinel" not in h, "auto-fill leaked without roots configured"
 
 
+def test_provenance_badge():
+    # prov_mark: manual/absent → no badge; heuristic → guess; others → auto
+    assert generate.prov_mark({"stack": "overrides"}, "stack") == ""
+    assert generate.prov_mark(None, "stack") == ""
+    assert 'class="prov"' in generate.prov_mark({"prod": "metadata"}, "prod")
+    assert 'class="prov guess"' in generate.prov_mark({"stack": "heuristic"}, "stack")
+
+    tmp = tempfile.mkdtemp()
+    root = os.path.join(tmp, "code"); os.makedirs(root)
+    d = mkrepo(root, "svc", {"CLAUDE.md": "# Svc\n\nDoes things.\n\n## Stack\n\nGo\n"})
+    generate.BASELINE = os.path.join(tmp, "b.json")
+    generate.INDEX = os.path.join(tmp, "i.html")
+
+    # roots on, one manual override → heuristic thesis badged, override unbadged
+    json.dump({"roots": [root], "projects": [{"name": "svc", "path": d, "prod_env": "MANUAL"}]},
+              open(generate.BASELINE, "w"))
+    generate.main()
+    h = open(generate.INDEX).read()
+    assert 'class="prov guess"' in h                       # heuristic thesis/stack
+    seg = h[h.index("MANUAL"): h.index("MANUAL") + 80]
+    assert "prov" not in seg                               # manual override → no badge
+
+    # roots off → no badges at all (existing users unaffected)
+    json.dump({"projects": [{"name": "svc", "path": d, "thesis": "m", "stack": "s"}]},
+              open(generate.BASELINE, "w"))
+    generate.main()
+    assert 'class="prov' not in open(generate.INDEX).read()
+
+
 if __name__ == "__main__":
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for t in tests:
