@@ -32,7 +32,7 @@ jobs:
       MACOS_CERT_P12: ${{ secrets.MACOS_CERT_P12 }}
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with: { python-version: "3.12" }
       - run: pip install -r requirements.txt pyinstaller
       - name: Import signing certificate (if configured)
@@ -67,7 +67,7 @@ jobs:
       SIGNPATH_API_TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with: { python-version: "3.12" }
       - run: pip install -r requirements.txt pyinstaller pillow pythonnet
       - name: Install Inno Setup (for the installer; zip still ships without it)
