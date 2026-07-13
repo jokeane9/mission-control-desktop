@@ -726,7 +726,7 @@ function ghConnect(){
   var b=document.getElementById('ghsave');b.disabled=true;b.textContent='Connecting…';
   window.pywebview.api.github_connect(tok).then(function(r){
     b.disabled=false;b.textContent='Connect';
-    if(r&&r.ok){closeGitHub();ghRefresh();}
+    if(r&&r.ok){closeGitHub();ghSync();}   // auto-sync so repos appear right away
     else{err.textContent=(r&&r.error)||'Connection failed.';}
   }).catch(function(){b.disabled=false;b.textContent='Connect';err.textContent='Connection failed.';});
 }
