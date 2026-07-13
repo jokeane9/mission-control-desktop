@@ -413,6 +413,13 @@ def main():
   --ink:#c9d1d9;--muted:#8b949e;--faint:#6e7681;--blue:#58a6ff;--green:#3fb950;--amber:#d29922;
   --mono:'SF Mono','Fira Code','Cascadia Code',Consolas,ui-monospace,Menlo,monospace}
 *{box-sizing:border-box}
+/* dark, muted scrollbars — the default WebKit ones render bright against the theme */
+::-webkit-scrollbar{width:11px;height:11px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:7px;
+  border:3px solid transparent;background-clip:padding-box}
+::-webkit-scrollbar-thumb:hover{background:var(--faint)}
+::-webkit-scrollbar-corner{background:transparent}
 body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--mono);font-size:13px;
   -webkit-font-smoothing:antialiased;height:100vh;display:flex;flex-direction:column;overflow:hidden}
 .app{flex:1;display:flex;min-height:0}
