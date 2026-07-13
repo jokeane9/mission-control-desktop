@@ -7,6 +7,11 @@ platforms.
 
 ## [Unreleased]
 
+## [1.2.2] — 2026-07-13
+### Fixed
+- Scrollbars now match the dark theme instead of rendering as bright white/grey
+  WebKit defaults.
+
 ## [1.2.1] — 2026-07-13
 ### Added
 - GitHub sync status in the sidebar — repo count + relative last-synced time.
@@ -60,7 +65,8 @@ platforms.
 - CI release pipeline: `v*` tag → build both platforms → publish GitHub Release
   → auto-bump the Homebrew cask.
 
-[Unreleased]: https://github.com/jokeane9/mission-control-desktop/compare/v1.2.1...HEAD
+[Unreleased]: https://github.com/jokeane9/mission-control-desktop/compare/v1.2.2...HEAD
+[1.2.2]: https://github.com/jokeane9/mission-control-desktop/compare/v1.2.1...v1.2.2
 [1.2.1]: https://github.com/jokeane9/mission-control-desktop/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/jokeane9/mission-control-desktop/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/jokeane9/mission-control-desktop/compare/v1.0.2...v1.1.0
