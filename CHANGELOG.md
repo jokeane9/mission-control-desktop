@@ -7,6 +7,16 @@ platforms.
 
 ## [Unreleased]
 
+## [1.4.0] — 2026-07-14
+### Added
+- **PM tab** — a local admin scratchpad as a top-level view. One free-text
+  notes area that autosaves to a local file as you type (and when you switch
+  views), so you always have a place to jot priorities, follow-ups, and
+  decisions. Local-only, never synced.
+- `PRODUCT.md` — the canonical product doc (what it is, who it's for, the
+  non-goals, and the open product questions incl. the deliberate no-sync /
+  no-accounts stance).
+
 ## [1.3.0] — 2026-07-14
 ### Added
 - Three new top-level sidebar views alongside the overview:

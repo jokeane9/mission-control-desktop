@@ -92,13 +92,37 @@ instrumented):
 
 ## Open product questions
 
-- **Name.** "Mission Control" collides with Apple's window manager. Rename
-  before any real launch push. (Tracked: issue #12.)
-- **Sync.** Recurring ask, but it collides with principle #1. Parked unless we
-  decide the local-only promise is worth trading — which would be a pivot, not
-  a feature.
-- **Reach beyond the solo multi-repo developer** — teams, or a hosted variant —
-  is explicitly deferred behind the local-first promise.
+Written as the actual question with the current thinking — not decisions, just
+the live tensions. Revisit these before any launch push.
+
+### Does it sync across devices? Does it need a login?
+
+**Short answer: no, and that's deliberate — for now.** Mission Control is a
+standalone local app. It runs as your OS user on one machine, keeps its config
+in a local file (plus the optional GitHub token in the OS keychain), and has no
+account system because there is no server to log into. Open it on a second
+machine and it starts empty.
+
+The question keeps coming up because "my projects, on all my devices" is a
+reasonable want. But real sync means a backend + accounts + data leaving the
+machine — a direct trade against principle #1 (local-first, no accounts, no
+telemetry). So the honest framing is: **sync isn't a missing feature, it's a
+different product.** If we ever do it, it's a deliberate strategy pivot
+documented here first (e.g. optional end-to-end-encrypted sync, or a
+bring-your-own-git-remote model that keeps the no-server promise) — never a
+feature that quietly erodes the local-only guarantee. Until then: **standalone,
+per-machine, no login.**
+
+### What's the name?
+
+"Mission Control" collides with Apple's window manager. It needs a rename before
+any real launch push. (Tracked: issue #12.)
+
+### Who beyond the solo multi-repo developer?
+
+Teams or a hosted variant are the obvious expansion, but both sit behind the
+same local-first wall as sync. Explicitly deferred — revisit only as a
+conscious pivot, not creep.
 
 ## Where the rest of the truth lives
 

@@ -41,6 +41,11 @@ items, reorder if priorities shifted, add anything new. Now / Next / Later.
 
 ## Completed
 
+- [x] 2026-07-14 — **PM scratchpad tab + canonical `PRODUCT.md`** (v1.4.0,
+      #28): a local autosaving admin notes view (bridge-gated like the config
+      editor; `pm_notes.md` in the data dir, gitignored) and the first product
+      doc. Sync/login captured as a deliberate no in PRODUCT.md's open
+      questions, not built.
 - [x] 2026-07-14 — **Top-level views epic** (v1.3.0): Skills catalog (#24),
       Work Log — commits chart + list + standup copy + overview Today line
       (#25), Roadmap aggregator (#26), per-day Claude token chart with a
