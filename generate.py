@@ -413,6 +413,8 @@ def main():
              views.skills_html(views.collect_skills(project_dirs)))
     worklog = views.collect_worklog(project_dirs)
     top_view("worklog", "work log", views.worklog_html(worklog))
+    top_view("roadmap", "roadmap",
+             views.roadmaps_html(views.collect_roadmaps(project_dirs)))
 
     now_dt = datetime.datetime.now()
     now = now_dt.strftime("%a %b %d · %H:%M")
@@ -543,6 +545,16 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--mono);font
   font-family:-apple-system,'Segoe UI','Helvetica Neue',sans-serif;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .wltime{flex:none;font-size:10px;color:var(--faint)}
+/* --- roadmap --- */
+.rmlink{margin-left:auto;font-size:9px;font-weight:400;letter-spacing:0;text-transform:none;
+  color:var(--blue);text-decoration:none}
+.rmlink:hover{text-decoration:underline}
+.rmsec{font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--amber);padding:8px 0 2px}
+.rmitem{font-size:11.5px;color:var(--muted);padding:3px 0 3px 14px;line-height:1.45;
+  font-family:-apple-system,'Segoe UI','Helvetica Neue',sans-serif;position:relative}
+.rmitem::before{content:'▸';position:absolute;left:0;color:var(--faint);font-size:9px;top:5px}
+.rmmore{font-size:10px;color:var(--faint);padding:2px 0 2px 14px}
 .statusbar{flex:none;border-top:1px solid var(--border);background:#0f1319;padding:7px 16px;
   font-size:10.5px;color:var(--muted);display:flex;justify-content:space-between}
 .statusbar b{color:var(--ink);font-weight:700}

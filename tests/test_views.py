@@ -130,6 +130,54 @@ def test_worklog_html():
     assert "copyStandup" in h and "wlRender()" in h and 'id="wlchart"' in h
 
 
+ROADMAP_MD = """# proj — Roadmap
+
+intro prose, not an item
+
+## Now — unblocks launch
+
+- [ ] **Ship [the thing](docs/thing.md)** — `now` item one
+- [x] already done, hidden
+- [ ] now item two
+
+## Next
+
+1. next item, numbered
+- [ ] next item two
+
+## Later
+
+- later item (not shown as now/next)
+"""
+
+
+def test_parse_roadmap():
+    s = V.parse_roadmap(ROADMAP_MD)
+    assert s["now"] == ["Ship the thing — now item one", "now item two"]
+    assert s["next"] == ["next item, numbered", "next item two"]
+    assert s["top"][0] == "Ship the thing — now item one"   # checked item skipped
+    # headingless file → only `top`
+    s = V.parse_roadmap("# t\n\n## Ideas\n\n- idea one\n- idea two\n")
+    assert s["now"] == [] and s["next"] == [] and s["top"] == ["idea one", "idea two"]
+
+
+def test_collect_and_render_roadmaps():
+    tmp = tempfile.mkdtemp()
+    a = os.path.join(tmp, "a"); os.makedirs(os.path.join(a, "project-management"))
+    open(os.path.join(a, "project-management", "ROADMAP.md"), "w").write(ROADMAP_MD)
+    b = os.path.join(tmp, "b"); os.makedirs(b)          # no roadmap → omitted
+    c = os.path.join(tmp, "c"); os.makedirs(c)
+    open(os.path.join(c, "ROADMAP.md"), "w").write("# c\n- only <item>\n")
+    rms = V.collect_roadmaps([("a", a), ("b", b), ("c", c)])
+    assert [r["name"] for r in rms] == ["a", "c"]
+    assert rms[0]["rel"] == "project-management/ROADMAP.md" and rms[1]["rel"] == "ROADMAP.md"
+    h = V.roadmaps_html(rms)
+    assert "Ship the thing" in h and "only &lt;item&gt;" in h      # escaped
+    assert h.count('class="rmsec"') == 3                # a: Now+Next · c: Top items
+    assert "2 projects with a ROADMAP.md" in h
+    assert "No ROADMAP.md found" in V.roadmaps_html([])
+
+
 if __name__ == "__main__":
     fails = 0
     for fn in sorted(k for k in list(globals()) if k.startswith("test_")):
