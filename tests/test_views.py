@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Top-level views tests — Skills catalog parsing, grouping, rendering.
+"""Top-level views tests — Skills catalog and Work Log collection + rendering.
 Stdlib only; run: python tests/test_views.py  (exits non-zero on failure)."""
-import os, sys, tempfile
+import os, subprocess, sys, tempfile, time
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
@@ -75,6 +75,59 @@ def test_skills_html():
     assert 'class="sgcount">1<' in h
     # empty catalog renders the hint, not a crash
     assert "No SKILL.md" in V.skills_html([])
+
+
+def mkrepo(base, name, email="1234+me@noreply.x.test"):   # regex-hostile, like GitHub's
+    d = os.path.join(base, name)
+    os.makedirs(d)
+    subprocess.run(["git", "init", "-q", d], check=True)
+    subprocess.run(["git", "-C", d, "config", "user.email", email], check=True)
+    subprocess.run(["git", "-C", d, "config", "user.name", "Me"], check=True)
+    return d
+
+
+def mkcommit(repo, msg, epoch, email="1234+me@noreply.x.test"):
+    env = dict(os.environ,
+               GIT_AUTHOR_DATE=f"@{epoch} +0000", GIT_COMMITTER_DATE=f"@{epoch} +0000",
+               GIT_AUTHOR_EMAIL=email, GIT_COMMITTER_EMAIL=email,
+               GIT_AUTHOR_NAME="Me", GIT_COMMITTER_NAME="Me")
+    subprocess.run(["git", "-C", repo, "commit", "--allow-empty", "-q", "-m", msg],
+                   env=env, check=True)
+
+
+def test_collect_worklog():
+    tmp = tempfile.mkdtemp()
+    now = int(time.time())
+    r1 = mkrepo(tmp, "one")
+    # chronological, like a real repo — `--since` prunes traversal at the first
+    # too-old commit, so an old commit at the tip would hide everything below it
+    mkcommit(r1, "ancient", now - 200 * 86400)          # outside the window
+    mkcommit(r1, "older work", now - 5 * 86400)
+    mkcommit(r1, "someone else", now - 3000, email="upstream@fork.test")
+    mkcommit(r1, "recent work", now - 3600)
+    r2 = mkrepo(tmp, "two")                             # empty repo → no crash
+    cs = V.collect_worklog([("one", r1), ("two", r2)])
+    msgs = [c["s"] for c in cs]
+    assert msgs == ["recent work", "older work"]        # newest first, mine only
+    assert cs[0]["r"] == "one" and cs[0]["t"] == now - 3600
+    assert V.collect_worklog([]) == []
+
+
+def test_today_line():
+    now = int(time.time())
+    line = V.today_line([{"r": "a", "t": now, "s": "x"},
+                         {"r": "b", "t": now, "s": "y"},
+                         {"r": "a", "t": now - 40 * 86400, "s": "old"}])
+    assert "2 commits" in line and "2 repos" in line
+    assert V.today_line([]) == "Today · no commits yet"
+    one = V.today_line([{"r": "a", "t": now, "s": "x"}])
+    assert "1 commit</b>" in one and "1 repo</b>" in one   # singular forms
+
+
+def test_worklog_html():
+    h = V.worklog_html([{"r": "one", "t": 1700000000, "s": "close </script> tag"}])
+    assert "<\\/script> tag" in h                       # embedded JSON can't break out
+    assert "copyStandup" in h and "wlRender()" in h and 'id="wlchart"' in h
 
 
 if __name__ == "__main__":

@@ -411,6 +411,8 @@ def main():
 
     top_view("skills", "skills",
              views.skills_html(views.collect_skills(project_dirs)))
+    worklog = views.collect_worklog(project_dirs)
+    top_view("worklog", "work log", views.worklog_html(worklog))
 
     now_dt = datetime.datetime.now()
     now = now_dt.strftime("%a %b %d · %H:%M")
@@ -512,6 +514,35 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--mono);font
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .skhint{flex:none;font-size:10px;color:var(--blue);opacity:.85}
 .skhint.auto{color:var(--faint);opacity:1}
+/* --- work log --- */
+.todayline{font-size:11.5px;color:var(--muted);margin-bottom:12px}
+.todayline b{color:var(--ink)}
+.wlbar{display:flex;align-items:center;gap:6px;margin-bottom:14px;max-width:980px}
+.fbtn{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--faint);padding:4px 10px;cursor:pointer;border:1px solid var(--border);
+  border-radius:5px;background:transparent}
+.fbtn:hover{color:var(--ink);background:var(--panel)}
+.fbtn.on{color:var(--blue);border-color:var(--blue);background:#1a2a3a}
+.standup{margin-left:auto;font:inherit;font-size:10.5px;color:var(--ink);background:#1a212b;
+  border:1px solid var(--border);border-radius:5px;padding:4px 10px;cursor:pointer}
+.standup:hover{background:#232c38;border-color:#3a4657}
+.wlchart{position:relative;background:var(--panel);border:1px solid var(--border);
+  border-radius:8px;padding:10px 14px;margin-bottom:12px;max-width:980px}
+.wlsvg{display:block;width:100%;height:auto}
+.wlgrid{stroke:var(--border);stroke-width:1}
+.wllbl{fill:var(--faint);font-family:var(--mono);font-size:9px}
+.wlmark{fill:var(--blue);opacity:.55}
+.wlmark:hover{opacity:.9}
+.wltip{display:none;position:absolute;z-index:5;pointer-events:none;font-size:10.5px;
+  color:var(--ink);background:var(--panel2);border:1px solid var(--border2);
+  border-radius:5px;padding:3px 8px;white-space:nowrap}
+.wlrow{display:flex;gap:12px;align-items:baseline;padding:4px 0;border-top:1px solid var(--border)}
+.wlrepo{flex:0 0 150px;color:var(--blue);font-weight:700;font-size:11px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wlmsg{flex:1;min-width:0;color:var(--muted);font-size:11.5px;
+  font-family:-apple-system,'Segoe UI','Helvetica Neue',sans-serif;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wltime{flex:none;font-size:10px;color:var(--faint)}
 .statusbar{flex:none;border-top:1px solid var(--border);background:#0f1319;padding:7px 16px;
   font-size:10.5px;color:var(--muted);display:flex;justify-content:space-between}
 .statusbar b{color:var(--ink);font-weight:700}
@@ -579,7 +610,7 @@ body.nobridge .editonly{display:none}
     <div class="editonly" id="ghbox"></div>
   </div>
   <div class="main">
-    <div class="view on" id="v-overview"><div class="grid">%%CARDS%%</div></div>
+    <div class="view on" id="v-overview"><div class="todayline">%%TODAY%%</div><div class="grid">%%CARDS%%</div></div>
     %%TOPVIEWS%%
     %%DETAILS%%
   </div>
@@ -797,6 +828,7 @@ function ghDisconnect(){
                .replace("%%COUNT%%", str(len(projects)))
                .replace("%%TOPSIDE%%", "".join(top_side))
                .replace("%%TOPVIEWS%%", "".join(top_views))
+               .replace("%%TODAY%%", views.today_line(worklog))
                .replace("%%SIDE%%", "".join(side))
                .replace("%%CARDS%%", "".join(cards))
                .replace("%%DETAILS%%", "".join(details))
