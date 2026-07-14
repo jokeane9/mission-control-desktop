@@ -1,4 +1,5 @@
-# Version manifest — TEMPLATE (see README.md / stamp.sh).
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.version.1.6.0.schema.json
+# Template: __VERSION__ is filled by stamp.sh <version> (README.md).
 PackageIdentifier: JohnOKeane.MissionControl
 PackageVersion: __VERSION__
 DefaultLocale: en-US

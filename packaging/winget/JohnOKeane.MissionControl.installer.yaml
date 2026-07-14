@@ -1,6 +1,5 @@
-# Installer manifest — TEMPLATE. Do not submit this file directly; run
-# packaging/winget/stamp.sh <version> to fill __VERSION__ / __INSTALLER_URL__ /
-# __SHA256__ against a real signed release. See README.md in this folder.
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.installer.1.6.0.schema.json
+# Template: __VERSION__ / __INSTALLER_URL__ / __SHA256__ are filled by stamp.sh <version> (README.md).
 PackageIdentifier: JohnOKeane.MissionControl
 PackageVersion: __VERSION__
 InstallerLocale: en-US

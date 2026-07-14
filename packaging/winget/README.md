@@ -12,29 +12,36 @@ winget's validation pipeline rejects low-reputation unsigned installers.
 - `JohnOKeane.MissionControl.yaml` — version/root manifest
 
 These are **templates** with `__VERSION__` / `__INSTALLER_URL__` / `__SHA256__`
-placeholders. `PackageIdentifier` is `JohnOKeane.MissionControl` — provisional
-until the name decision
-([#12](https://github.com/jokeane9/mission-control-desktop/issues/12)); if the
-app is renamed, rename these files and the identifier to match.
+placeholders (each carries a `# yaml-language-server: $schema=…` line for editor
+validation; `stamp.sh` fills the placeholders and drops the `# Template:` note).
+`PackageIdentifier` is `JohnOKeane.MissionControl` — the name is retained for now
+(the launch-rename question [#12] was closed as *not planned*, parked in
+[`PRODUCT.md`](../../PRODUCT.md) → Open product questions). If the app is ever
+renamed, rename these files and the identifier to match.
 
 ## Submit a version
 
 1. **Stamp** the templates against the signed release:
    ```sh
-   ./packaging/winget/stamp.sh 1.1.0
-   # writes out/manifests/j/JohnOKeane/MissionControl/1.1.0/
+   ./packaging/winget/stamp.sh 1.4.0
+   # writes out/manifests/j/JohnOKeane/MissionControl/1.4.0/
    ```
 2. **Validate + test** on a Windows machine (Windows Sandbox recommended):
    ```sh
-   winget validate --manifest packaging\winget\out\manifests\j\JohnOKeane\MissionControl\1.1.0
-   winget install  --manifest packaging\winget\out\manifests\j\JohnOKeane\MissionControl\1.1.0
+   winget validate --manifest packaging\winget\out\manifests\j\JohnOKeane\MissionControl\1.4.0
+   winget install  --manifest packaging\winget\out\manifests\j\JohnOKeane\MissionControl\1.4.0
    ```
 3. **Open the PR** to [microsoft/winget-pkgs](https://github.com/microsoft/winget-pkgs):
    copy the stamped folder to `manifests/j/JohnOKeane/MissionControl/<version>/`
    in a fork and PR it. The `wingetcreate` tool automates this:
    ```sh
-   wingetcreate submit --token <gh-token> packaging\winget\out\manifests\j\JohnOKeane\MissionControl\1.1.0
+   wingetcreate submit --token <gh-token> packaging\winget\out\manifests\j\JohnOKeane\MissionControl\1.4.0
    ```
+
+> **Tip:** `stamp.sh` works against any existing release, so you can dry-run the
+> tooling today (`./packaging/winget/stamp.sh 1.4.0` stamps the current build and
+> proves URL/SHA/layout). Only **submit** a manifest for a *signed* installer —
+> winget rejects low-reputation unsigned ones (see the note above).
 
 ## Future updates (already automated)
 
@@ -54,7 +61,7 @@ the update PR. It's dormant until you enable it:
    by hand instead:
    ```sh
    wingetcreate update JohnOKeane.MissionControl \
-     --version 1.2.0 \
-     --urls "https://github.com/jokeane9/mission-control-desktop/releases/download/v1.2.0/MissionControl-1.2.0-setup.exe" \
+     --version 1.4.0 \
+     --urls "https://github.com/jokeane9/mission-control-desktop/releases/download/v1.4.0/MissionControl-1.4.0-setup.exe" \
      --submit --token <gh-token>
    ```
