@@ -412,7 +412,8 @@ def main():
     top_view("skills", "skills",
              views.skills_html(views.collect_skills(project_dirs)))
     worklog = views.collect_worklog(project_dirs)
-    top_view("worklog", "work log", views.worklog_html(worklog))
+    tokens = views.collect_tokens(os.path.join(DATA, "token_cache.json"))
+    top_view("worklog", "work log", views.worklog_html(worklog, tokens))
     top_view("roadmap", "roadmap",
              views.roadmaps_html(views.collect_roadmaps(project_dirs)))
 
@@ -535,6 +536,11 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--mono);font
 .wllbl{fill:var(--faint);font-family:var(--mono);font-size:9px}
 .wlmark{fill:var(--blue);opacity:.55}
 .wlmark:hover{opacity:.9}
+.wlmark2{fill:var(--green);opacity:.5}
+.wlmark2:hover{opacity:.9}
+.wlcap{font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--faint);margin:0 0 4px 2px;max-width:980px}
+.wlcapsub{font-weight:400;letter-spacing:.02em;text-transform:none;color:var(--faint)}
 .wltip{display:none;position:absolute;z-index:5;pointer-events:none;font-size:10.5px;
   color:var(--ink);background:var(--panel2);border:1px solid var(--border2);
   border-radius:5px;padding:3px 8px;white-space:nowrap}
