@@ -7,6 +7,13 @@ platforms.
 
 ## [Unreleased]
 
+## [1.4.1] — 2026-07-14
+### Fixed
+- The app no longer swallows dashboard-regeneration errors silently. If a
+  refresh fails, the traceback is written to `error.log` in the data dir (and
+  stderr) instead of leaving a stale page with no signal. No behavior change in
+  the normal case — purely diagnosability.
+
 ## [1.4.0] — 2026-07-14
 ### Added
 - **PM tab** — a local admin scratchpad as a top-level view. One free-text
