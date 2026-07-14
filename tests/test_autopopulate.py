@@ -84,6 +84,7 @@ def test_integration():
     mkrepo(root, "alpha", {"CLAUDE.md": "# A\n\nAlpha does pipelines.\n\n## Stack\n\nZig-Nim-sentinel\n"})
     mkrepo(root, "beta", {"package.json": json.dumps({"description": "Beta app", "homepage": "https://b.dev"})})
     mkrepo(root, "gamma", {".mission-control.json": json.dumps({"thesis": "Gamma block", "tier": "tools"})})
+    generate.DATA = tmp        # keep a real dev github_cache.json out of the render
     generate.BASELINE = os.path.join(tmp, "baseline.json")
     generate.INDEX = os.path.join(tmp, "index.html")
 
@@ -156,6 +157,7 @@ def test_provenance_badge():
     tmp = tempfile.mkdtemp()
     root = os.path.join(tmp, "code"); os.makedirs(root)
     d = mkrepo(root, "svc", {"CLAUDE.md": "# Svc\n\nDoes things.\n\n## Stack\n\nGo\n"})
+    generate.DATA = tmp        # keep a real dev github_cache.json out of the render
     generate.BASELINE = os.path.join(tmp, "b.json")
     generate.INDEX = os.path.join(tmp, "i.html")
 
