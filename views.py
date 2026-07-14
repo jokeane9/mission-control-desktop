@@ -11,6 +11,8 @@ Views:
              filter and a "Copy as standup" button.
   Roadmap  — every project's ROADMAP.md in one place: the Now/Next sections
              (or the top items when a roadmap has neither), linked to the file.
+  PM       — a local, always-there admin scratchpad: one free-text notes file
+             the desktop app autosaves. Not synced; lives in the data dir.
 """
 import datetime
 import glob
@@ -573,3 +575,76 @@ def skills_html(grouped):
   {"".join(rows)}
 </div>''')
     return "".join(out)
+
+
+# --------------------------------------------------------------------------- #
+# PM — a local admin scratchpad. One free-text file the desktop app autosaves
+# through the JS→Python bridge; read here at render time and embedded in a
+# textarea. Not synced, not in git — it lives in the per-user data dir.
+# --------------------------------------------------------------------------- #
+NOTES_PLACEHOLDER = ("Your always-there PM scratchpad.\n\n"
+                     "Jot anything — priorities, follow-ups, decisions, links. "
+                     "It autosaves locally in the desktop app; nothing leaves "
+                     "your machine.")
+
+
+def load_notes(path):
+    """The scratchpad text, or '' if there's nothing saved yet."""
+    try:
+        return open(path, encoding="utf-8").read()
+    except OSError:
+        return ""
+
+
+def save_notes(path, text):
+    """Persist the scratchpad (atomic-ish via temp file + replace). Returns
+    (ok, error)."""
+    try:
+        tmp = path + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            f.write(text if isinstance(text, str) else "")
+        os.replace(tmp, path)
+        return True, ""
+    except OSError as e:
+        return False, str(e)
+
+
+def notes_html(text):
+    """The PM view body: a full-height textarea with an autosave status line.
+    Editing needs the bridge (packaged app); in a plain browser the pad is
+    read-only, matching the config editor's behaviour."""
+    esc = html.escape
+    head = (f'''<div class="dhead"><span class="dname">PM</span>
+    <span class="dthesis">Admin scratchpad · autosaves locally · not synced</span>
+    <span class="pmstatus" id="pmstatus"></span></div>
+  <textarea class="pmpad" id="pmpad" spellcheck="false" readonly
+    placeholder="{esc(NOTES_PLACEHOLDER)}"
+    oninput="pmDirty()">{esc(text)}</textarea>
+  <div class="pmhint editonly">Autosaves as you type. Also saved when you switch views.</div>
+  <div class="pmhint nobridgeonly">Read-only here — open the desktop app to edit and save.</div>''')
+    return head + """
+<script>
+var PM_TIMER=null, PM_SAVED=true;
+function pmBridge(){return window.pywebview&&window.pywebview.api&&window.pywebview.api.save_notes;}
+function pmStatus(msg,cls){var el=document.getElementById('pmstatus');
+  if(el){el.textContent=msg;el.className='pmstatus'+(cls?' '+cls:'');}}
+function pmDirty(){
+  if(!pmBridge())return;
+  PM_SAVED=false;pmStatus('unsaved…','');
+  if(PM_TIMER)clearTimeout(PM_TIMER);
+  PM_TIMER=setTimeout(pmSave,800);              // debounce: save 0.8s after typing stops
+}
+function pmSave(){
+  if(!pmBridge()||PM_SAVED)return;
+  var txt=document.getElementById('pmpad').value;
+  pmStatus('saving…','');
+  window.pywebview.api.save_notes(txt).then(function(r){
+    if(r&&r.ok){PM_SAVED=true;pmStatus('saved ✓','ok');}
+    else{pmStatus((r&&r.error)||'save failed','err');}
+  }).catch(function(){pmStatus('save failed','err');});
+}
+// Flush a pending save when the tab/window goes away, so nothing is lost to
+// the 15-min meta-refresh or a close.
+window.addEventListener('visibilitychange',function(){if(document.hidden)pmSave();});
+window.addEventListener('beforeunload',pmSave);
+</script>"""

@@ -10,6 +10,7 @@ import os, sys, threading, time, subprocess, webbrowser, webview
 import webview.menu as wm
 import generate            # sibling: main(), INDEX, resource_path()
 import resolve             # sibling: load_github_cache() for sync status
+import views               # sibling: PM scratchpad save_notes()
 import github_auth         # sibling: GitHub token (keychain) — P3.1
 import github_sync as ghsync  # sibling: list repos → github_cache.json — P3.2
 
@@ -47,6 +48,15 @@ class Api:
             generate.delete_project(name)
             generate.main()
             return {"ok": True, "error": ""}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def save_notes(self, text):
+        """Persist the PM scratchpad. No regenerate — the textarea already
+        holds the text; the next render (or reload) reads it back from disk."""
+        try:
+            ok, err = views.save_notes(generate.NOTES, text)
+            return {"ok": ok, "error": err}
         except Exception as e:
             return {"ok": False, "error": str(e)}
 

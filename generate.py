@@ -45,6 +45,7 @@ def _data_dir():
 DATA = _data_dir()
 BASELINE = os.path.join(DATA, "baseline.json")
 INDEX = os.path.join(DATA, "index.html")
+NOTES = os.path.join(DATA, "pm_notes.md")   # PM scratchpad — local, gitignored
 
 
 # The editable per-project fields, in form order. Single source of truth: the
@@ -416,6 +417,7 @@ def main():
     top_view("worklog", "work log", views.worklog_html(worklog, tokens))
     top_view("roadmap", "roadmap",
              views.roadmaps_html(views.collect_roadmaps(project_dirs)))
+    top_view("pm", "pm", views.notes_html(views.load_notes(NOTES)))
 
     now_dt = datetime.datetime.now()
     now = now_dt.strftime("%a %b %d · %H:%M")
@@ -561,6 +563,18 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--mono);font
   font-family:-apple-system,'Segoe UI','Helvetica Neue',sans-serif;position:relative}
 .rmitem::before{content:'▸';position:absolute;left:0;color:var(--faint);font-size:9px;top:5px}
 .rmmore{font-size:10px;color:var(--faint);padding:2px 0 2px 14px}
+/* --- PM scratchpad --- */
+.pmstatus{font-size:10px;color:var(--faint);margin-left:auto;align-self:center}
+.pmstatus.ok{color:var(--green)}
+.pmstatus.err{color:#ff6b6b}
+.pmpad{flex:1;min-height:360px;width:100%;max-width:980px;resize:none;
+  font-family:var(--mono);font-size:12.5px;line-height:1.6;color:var(--ink);
+  background:var(--panel);border:1px solid var(--border);border-radius:8px;
+  padding:14px 16px;tab-size:2}
+.pmpad:focus{outline:none;border-color:var(--border2)}
+.pmpad::placeholder{color:var(--faint)}
+.pmpad[readonly]{opacity:.85;cursor:default}
+.pmhint{font-size:10px;color:var(--faint);margin:8px 0 0 2px;max-width:980px}
 .statusbar{flex:none;border-top:1px solid var(--border);background:#0f1319;padding:7px 16px;
   font-size:10.5px;color:var(--muted);display:flex;justify-content:space-between}
 .statusbar b{color:var(--ink);font-weight:700}
@@ -578,6 +592,7 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--mono);font
 /* Higher specificity than the control rules below, so editor controls stay
    hidden until reveal() drops `nobridge` from <body>. */
 body.nobridge .editonly{display:none}
+body:not(.nobridge) .nobridgeonly{display:none}
 .addbtn{margin:6px 12px 0;font:inherit;font-size:11px;color:var(--blue);background:transparent;
   border:1px dashed var(--border2);border-radius:5px;padding:5px 8px;cursor:pointer;width:calc(100% - 24px)}
 .addbtn:hover{background:var(--panel);border-color:var(--blue)}
@@ -725,7 +740,8 @@ document.addEventListener('keydown',function(e){
   // reveal Add/Edit/Delete controls only when the bridge exists (packaged app);
   // in a plain browser they'd have nothing to write to. Dropping the body class
   // lets each control fall back to its natural display.
-  function reveal(){document.body.classList.remove('nobridge');ghRefresh();}
+  function reveal(){document.body.classList.remove('nobridge');ghRefresh();
+    var pad=document.getElementById('pmpad');if(pad)pad.removeAttribute('readonly');}
   if(window.pywebview&&window.pywebview.api){reveal();}
   else{window.addEventListener('pywebviewready',reveal);}
 })();
