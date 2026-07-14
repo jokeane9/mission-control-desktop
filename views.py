@@ -13,6 +13,7 @@ Views:
              (or the top items when a roadmap has neither), linked to the file.
 """
 import datetime
+import glob
 import html
 import json
 import os
@@ -183,6 +184,86 @@ def collect_worklog(project_dirs, days=WORKLOG_DAYS):
     return commits
 
 
+def _parse_transcript(path):
+    """Per-day usage totals from one Claude Code session transcript.
+    Cheap pre-filter (most lines carry no usage), then dedupe by message id —
+    streaming updates repeat a message's usage on several lines; keep the last."""
+    ids = {}
+    try:
+        for line in open(path, encoding="utf-8", errors="ignore"):
+            if '"usage"' not in line:      # cheap pre-filter; most lines skip here
+                continue
+            try:
+                d = json.loads(line)
+            except Exception:
+                continue
+            m = d.get("message") or {}
+            u = m.get("usage")
+            ts = d.get("timestamp")
+            if isinstance(u, dict) and ts:
+                ids[m.get("id") or d.get("requestId") or ts] = (ts, u)
+    except OSError:
+        return {}
+    days = {}
+    for ts, u in ids.values():
+        try:
+            day = (datetime.datetime.fromisoformat(ts.replace("Z", "+00:00"))
+                   .astimezone().date().isoformat())
+        except ValueError:
+            continue
+        t = days.setdefault(day, [0, 0, 0, 0])
+        for i, k in enumerate(("input_tokens", "output_tokens",
+                               "cache_creation_input_tokens", "cache_read_input_tokens")):
+            try:
+                t[i] += int(u.get(k) or 0)
+            except (TypeError, ValueError):
+                pass
+    return days
+
+
+def collect_tokens(cache_path, claude_dir=CLAUDE_DIR, days=WORKLOG_DAYS):
+    """{'YYYY-MM-DD': [input, output, cache_write, cache_read], …} per local
+    day, summed across every Claude Code session transcript. The transcripts
+    are hundreds of MB, so results are cached per file keyed on (size, mtime)
+    — a regen reparses only transcripts that changed since the last one."""
+    files = sorted(glob.glob(os.path.join(claude_dir, "projects", "*", "*.jsonl")))
+    try:
+        cache = json.load(open(cache_path, encoding="utf-8"))
+        if cache.get("v") != 1:
+            raise ValueError
+    except Exception:
+        cache = {"v": 1, "files": {}}
+    entries, changed = {}, False
+    for f in files:
+        try:
+            st = os.stat(f)
+        except OSError:
+            continue
+        c = cache["files"].get(f)
+        if c and c.get("size") == st.st_size and c.get("mtime") == st.st_mtime:
+            entries[f] = c
+        else:
+            entries[f] = {"size": st.st_size, "mtime": st.st_mtime,
+                          "days": _parse_transcript(f)}
+            changed = True
+    if changed or set(entries) != set(cache["files"]):
+        try:
+            tmp = cache_path + ".tmp"
+            json.dump({"v": 1, "files": entries}, open(tmp, "w"))
+            os.replace(tmp, cache_path)
+        except OSError:
+            pass                       # cache is an optimization, never a failure
+    cutoff = (datetime.date.today() - datetime.timedelta(days=days)).isoformat()
+    total = {}
+    for e in entries.values():
+        for day, v in e["days"].items():
+            if day >= cutoff:
+                t = total.setdefault(day, [0, 0, 0, 0])
+                for i in range(4):
+                    t[i] += v[i]
+    return total
+
+
 def today_line(commits):
     """The overview's one-liner: 'N commits across M repos today'."""
     midnight = datetime.datetime.now().replace(hour=0, minute=0, second=0,
@@ -196,10 +277,20 @@ def today_line(commits):
             f'<b>{repos} repo{"s" if repos != 1 else ""}</b>')
 
 
-def worklog_html(commits):
-    """The Work Log view body. Data is embedded once; the range filter, chart,
-    and day-grouped list all re-render client-side (no regen round-trip)."""
+def worklog_html(commits, tokens=None):
+    """The Work Log view body. Data is embedded once; the range filter, charts,
+    and day-grouped list all re-render client-side (no regen round-trip).
+    `tokens` is collect_tokens() output; the day's chart series is the tokens
+    actually processed (input + output + cache writes) — cache reads are ~50×
+    larger and would flatten everything else. Two measures of different scale
+    (commits, tokens) = two charts sharing the time axis, never a dual axis."""
     data = json.dumps(commits).replace("</", "<\\/")
+    tok = {d: v[0] + v[1] + v[2] for d, v in (tokens or {}).items()}
+    tokchart = ""
+    if tok:
+        tokchart = """
+  <div class="wlcap">Claude tokens / day <span class="wlcapsub">in + out + cache writes · cache reads excluded</span></div>
+  <div class="wlchart" id="wltokchart"><div class="wltip" id="wltoktip"></div></div>"""
     return """<div class="dhead"><span class="dname">Work Log</span>
     <span class="dthesis" id="wlsum"></span></div>
   <div class="wlbar">
@@ -209,10 +300,12 @@ def worklog_html(commits):
     <span class="fbtn" onclick="wlSet('quarter',this)">3 months</span>
     <button class="standup" id="standupbtn" onclick="copyStandup(this)">Copy as standup</button>
   </div>
-  <div class="wlchart" id="wlchart"><div class="wltip" id="wltip"></div></div>
+  <div class="wlcap">commits / day</div>
+  <div class="wlchart" id="wlchart"><div class="wltip" id="wltip"></div></div>""" + tokchart + """
   <div id="wllist"></div>
 <script>
 var WORKLOG=""" + data + """;
+var WLTOKENS=""" + json.dumps(tok) + """;
 var WL_RANGE='week';
 var WL_DAYS={today:1,week:7,month:31,quarter:92};
 function wlDayKey(d){return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);}
@@ -228,23 +321,34 @@ function wlWindow(){
   var start=new Date(end);start.setDate(end.getDate()-(WL_DAYS[WL_RANGE]-1));
   return [start,end];
 }
+function wlFmtNum(n){
+  if(n>=1e6)return (n/1e6>=10?Math.round(n/1e6):(n/1e6).toFixed(1))+'M';
+  if(n>=1e3)return Math.round(n/1e3)+'k';
+  return String(n);
+}
 function wlRender(){
   var se=wlWindow(),start=se[0],end=se[1];
+  var order=[];
+  for(var d=new Date(start);d<=end;d.setDate(d.getDate()+1))order.push(wlDayKey(d));
   var cs=WORKLOG.filter(function(c){return c.t*1000>=start.getTime();});
   var repos={};cs.forEach(function(c){repos[c.r]=1;});
   document.getElementById('wlsum').textContent=
     cs.length+' commits · '+Object.keys(repos).length+' repos in range';
-  wlChart(cs,start,end);
-  wlList(cs);
-}
-function wlChart(cs,start,end){
-  var counts={},order=[];
-  for(var d=new Date(start);d<=end;d.setDate(d.getDate()+1)){
-    var k=wlDayKey(d);order.push(k);counts[k]=0;}
+  var counts={};order.forEach(function(k){counts[k]=0;});
   cs.forEach(function(c){var k=wlDayKey(new Date(c.t*1000));
     if(k in counts)counts[k]++;});
-  var max=1;order.forEach(function(k){if(counts[k]>max)max=counts[k];});
-  var W=920,H=120,L=34,B=18,T=8,pw=(W-L-6)/order.length;
+  wlBarChart('wlchart','wltip',order,counts,'wlmark',
+    function(v){return v+' commit'+(v!==1?'s':'');},String);
+  if(document.getElementById('wltokchart')){
+    var tv={};order.forEach(function(k){tv[k]=WLTOKENS[k]||0;});
+    wlBarChart('wltokchart','wltoktip',order,tv,'wlmark2',
+      function(v){return wlFmtNum(v)+' tokens';},wlFmtNum);
+  }
+  wlList(cs);
+}
+function wlBarChart(holderId,tipId,order,vals,markCls,fmtTip,fmtAxis){
+  var max=1;order.forEach(function(k){if(vals[k]>max)max=vals[k];});
+  var W=920,H=120,L=40,B=18,T=8,pw=(W-L-6)/order.length;
   var svgNS='http://www.w3.org/2000/svg';
   var svg=document.createElementNS(svgNS,'svg');
   svg.setAttribute('viewBox','0 0 '+W+' '+H);
@@ -256,15 +360,17 @@ function wlChart(cs,start,end){
     t.setAttribute('x',x);t.setAttribute('y',y);t.setAttribute('class','wllbl');
     if(anchor)t.setAttribute('text-anchor',anchor);
     t.textContent=s;svg.appendChild(t);}
-  // one y axis: baseline + max (+ midpoint when it's a whole number)
+  // one y axis: baseline + max (+ a midpoint when it labels cleanly)
   var y0=H-B,y1=T,plotH=y0-y1;
   line(L,y0,W,y0);text(L-5,y0+3,'0','end');
-  line(L,y1,W,y1);text(L-5,y1+3,String(max),'end');
-  if(max>=4&&max%2===0){var ym=y0-plotH/2;line(L,ym,W,ym);text(L-5,ym+3,String(max/2),'end');}
+  line(L,y1,W,y1);text(L-5,y1+3,fmtAxis(max),'end');
+  if(max>=4&&(max%2===0||max>=1000)){
+    var ym=y0-plotH/2;line(L,ym,W,ym);text(L-5,ym+3,fmtAxis(max/2),'end');}
   var step=order.length<=7?1:(order.length<=31?7:14);
-  var tip=document.getElementById('wltip');
+  var holder=document.getElementById(holderId);
+  var tip=document.getElementById(tipId);
   order.forEach(function(k,i){
-    var x=L+i*pw,c=counts[k];
+    var x=L+i*pw,c=vals[k];
     var day=new Date(k+'T00:00:00');
     if(i%step===0)text(x+pw/2,H-4,day.toLocaleDateString(undefined,{month:'short',day:'numeric'}),'middle');
     var bw=Math.max(2,Math.min(24,pw*0.7));
@@ -273,7 +379,7 @@ function wlChart(cs,start,end){
       var bh=Math.max(2,plotH*c/max);
       r.setAttribute('x',x+(pw-bw)/2);r.setAttribute('y',y0-bh);
       r.setAttribute('width',bw);r.setAttribute('height',bh);
-      r.setAttribute('rx',2);r.setAttribute('class','wlmark');
+      r.setAttribute('rx',2);r.setAttribute('class',markCls);
       svg.appendChild(r);
     }
     // full-height invisible hit target: hover works on empty days too
@@ -282,16 +388,15 @@ function wlChart(cs,start,end){
     hit.setAttribute('width',pw);hit.setAttribute('height',plotH);
     hit.setAttribute('fill','transparent');
     hit.addEventListener('mousemove',function(ev){
-      tip.textContent=wlFmtDay(day)+' · '+c+' commit'+(c!==1?'s':'');
+      tip.textContent=wlFmtDay(day)+' · '+fmtTip(c);
       tip.style.display='block';
-      var box=document.getElementById('wlchart').getBoundingClientRect();
+      var box=holder.getBoundingClientRect();
       tip.style.left=Math.min(ev.clientX-box.left+12,box.width-tip.offsetWidth-4)+'px';
       tip.style.top=(ev.clientY-box.top-26)+'px';
     });
     hit.addEventListener('mouseleave',function(){tip.style.display='none';});
     svg.appendChild(hit);
   });
-  var holder=document.getElementById('wlchart');
   var old=holder.querySelector('svg');if(old)old.remove();
   holder.appendChild(svg);
 }

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Top-level views tests — Skills catalog and Work Log collection + rendering.
 Stdlib only; run: python tests/test_views.py  (exits non-zero on failure)."""
-import os, subprocess, sys, tempfile, time
+import datetime, json, os, subprocess, sys, tempfile, time
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
@@ -128,6 +128,57 @@ def test_worklog_html():
     h = V.worklog_html([{"r": "one", "t": 1700000000, "s": "close </script> tag"}])
     assert "<\\/script> tag" in h                       # embedded JSON can't break out
     assert "copyStandup" in h and "wlRender()" in h and 'id="wlchart"' in h
+    assert 'id="wltokchart"' not in h                   # no token data → no 2nd chart
+    h = V.worklog_html([], tokens={"2026-07-01": [10, 20, 30, 99999]})
+    assert 'id="wltokchart"' in h
+    assert '"2026-07-01": 60' in h                      # in+out+cache_w, reads excluded
+
+
+def _usage_line(msg_id, ts, out_tokens):
+    return json.dumps({"type": "assistant", "timestamp": ts, "requestId": "r-" + msg_id,
+                       "message": {"id": msg_id, "usage": {
+                           "input_tokens": 100, "output_tokens": out_tokens,
+                           "cache_creation_input_tokens": 10,
+                           "cache_read_input_tokens": 5000}}}) + "\n"
+
+
+def test_collect_tokens():
+    tmp = tempfile.mkdtemp()
+    proj = os.path.join(tmp, "claude", "projects", "-Users-x-proj")
+    os.makedirs(proj)
+    day = datetime.date.today().isoformat()
+    ts = day + "T10:00:00.000Z"
+    f = os.path.join(proj, "session.jsonl")
+    with open(f, "w") as fh:
+        fh.write('{"type":"user","timestamp":"%s"}\n' % ts)      # no usage → skipped
+        fh.write(_usage_line("m1", ts, 50))                       # streamed twice:
+        fh.write(_usage_line("m1", ts, 70))                       # last one wins
+        fh.write(_usage_line("m2", ts, 30))
+        fh.write("not json at all\n")
+    cache = os.path.join(tmp, "token_cache.json")
+    claude = os.path.join(tmp, "claude")
+
+    tok = V.collect_tokens(cache, claude_dir=claude)
+    localday = (datetime.datetime.fromisoformat(ts.replace("Z", "+00:00"))
+                .astimezone().date().isoformat())
+    assert tok[localday] == [200, 100, 20, 10000]       # m1 deduped (70+30 out)
+
+    # unchanged file → served from the cache (doctor it to prove reuse)
+    c = json.load(open(cache))
+    key = next(iter(c["files"]))
+    c["files"][key]["days"] = {localday: [1, 2, 3, 4]}
+    json.dump(c, open(cache, "w"))
+    assert V.collect_tokens(cache, claude_dir=claude)[localday] == [1, 2, 3, 4]
+
+    # file grows → reparsed, real numbers come back
+    with open(f, "a") as fh:
+        fh.write(_usage_line("m3", ts, 1))
+    tok = V.collect_tokens(cache, claude_dir=claude)
+    assert tok[localday] == [300, 101, 30, 15000]
+
+    # no transcripts at all → empty dict, no crash
+    assert V.collect_tokens(os.path.join(tmp, "c2.json"),
+                            claude_dir=os.path.join(tmp, "nope")) == {}
 
 
 ROADMAP_MD = """# proj — Roadmap
