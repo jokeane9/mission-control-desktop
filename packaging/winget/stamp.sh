@@ -25,10 +25,13 @@ rm -rf "${HERE}/out"; mkdir -p "$OUT"
 for f in JohnOKeane.MissionControl.installer.yaml \
          JohnOKeane.MissionControl.locale.en-US.yaml \
          JohnOKeane.MissionControl.yaml; do
-  sed -e "s|__VERSION__|${VERSION}|g" \
-      -e "s|__INSTALLER_URL__|${URL}|g" \
-      -e "s|__SHA256__|${SHA}|g" \
-      "${HERE}/${f}" > "${OUT}/${f}"
+  # Drop the "# Template:" note (source-only) but keep the schema comment and
+  # the explanatory inline comments; then fill the placeholders.
+  grep -v '^# Template:' "${HERE}/${f}" \
+    | sed -e "s|__VERSION__|${VERSION}|g" \
+          -e "s|__INSTALLER_URL__|${URL}|g" \
+          -e "s|__SHA256__|${SHA}|g" \
+    > "${OUT}/${f}"
 done
 echo "stamped -> ${OUT}"
 echo
