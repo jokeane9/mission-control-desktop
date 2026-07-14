@@ -6,7 +6,7 @@ via pywebview. Distinct from menubar.py (the always-on menu-bar icon).
 Run:  ./.venv/bin/python app.py
 Packaged as "Mission Control.app" — see build_app.sh.
 """
-import os, sys, threading, time, subprocess, webbrowser, webview
+import os, sys, threading, time, subprocess, traceback, webbrowser, webview
 import webview.menu as wm
 import generate            # sibling: main(), INDEX, resource_path()
 import resolve             # sibling: load_github_cache() for sync status
@@ -20,6 +20,21 @@ REPO = "https://github.com/jokeane9/mission-control-desktop"
 WINDOW = None            # set in main(); menu handlers drive the page through it
 
 
+def _log_exc(where):
+    """Record a regeneration failure instead of swallowing it. A silent
+    `except: pass` around generate.main() is exactly how a packaged build once
+    shipped rendering a stale page — so write the traceback to the data dir
+    (and stderr) where it's diagnosable, then let the caller continue."""
+    try:
+        msg = (f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] regen failed ({where}):\n"
+               f"{traceback.format_exc()}\n")
+        sys.stderr.write(msg)
+        with open(os.path.join(generate.DATA, "error.log"), "a", encoding="utf-8") as f:
+            f.write(msg)
+    except Exception:
+        pass
+
+
 class Api:
     """JS bridge for the dashboard. Refresh git rescans every repo; the config
     editor adds/edits/removes projects in baseline.json. Every method rewrites
@@ -30,6 +45,7 @@ class Api:
             generate.main()   # fresh git scan + rewrite index.html
             return True
         except Exception:
+            _log_exc("refresh")
             return False
 
     def save_project(self, project, original=None):
@@ -146,7 +162,7 @@ def _regen_loop():
         try:
             generate.main()
         except Exception:
-            pass
+            _log_exc("regen loop")
 
 
 def _js(code):
@@ -201,7 +217,7 @@ def main():
     try:
         generate.main()          # fresh git scan + rewrite index.html on launch
     except Exception:
-        pass                     # never block the window on a scan hiccup
+        _log_exc("startup regen")  # logged, not swallowed — but never block the window
     _brand_dock()
     threading.Thread(target=_regen_loop, daemon=True).start()
     WINDOW = webview.create_window(
