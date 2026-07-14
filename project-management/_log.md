@@ -92,3 +92,35 @@ merged) and cleared a backlog of stale Dependabot PRs.
 
 **Still open owner-only:** Project board (needs `project` scope), rotate
 `TAP_GITHUB_TOKEN`, SignPath enrollment.
+
+---
+
+## 2026-07-14 — Top-level views epic → v1.3.0
+
+**What happened:** Added three new top-level sidebar views (peers of the
+overview) in four branch→PR→green-CI→merge cycles, then released v1.3.0.
+
+- **Skills** (#24) — searchable catalog of Claude Code skills. New stdlib
+  sibling `views.py` (collect_* pure-data + *_html renderers); generate.py
+  gained `%%TOPSIDE%%`/`%%TOPVIEWS%%` template slots for top-level views.
+- **Work Log** (#25) — own-commits-only across all dashboard repos
+  (per-repo + global user.email, `--fixed-strings`), commits/day SVG chart +
+  day-grouped list, Today/Week/Month/3-months filter, Copy-as-standup,
+  overview "Today · N commits across M repos" line.
+- **Roadmap** (#26) — Now/Next of every project's ROADMAP.md (3 conventional
+  locations, top-items fallback), linked to the file.
+- **Token chart** (#27) — tokens/day from ~/.claude session transcripts as a
+  second chart sharing the time axis (never dual-axis); per-file (size,mtime)
+  cache in DATA/token_cache.json; series excludes cache reads (~50× larger).
+
+**Gotchas worth remembering:**
+- `git log --author` is POSIX basic regex: `re.escape` turns the `+` in GitHub
+  noreply emails into a repetition operator that silently matches nothing —
+  use `--fixed-strings`.
+- `git log --since` prunes traversal at the first too-old commit, so tests
+  must create commits in chronological order.
+- The autopopulate tests were leaking the dev github_cache.json into their
+  sandboxed renders (green in CI, red locally) — they now override
+  `generate.DATA` too.
+
+**Released:** v1.3.0 (tag → CI builds both platforms → Release → tap bump).

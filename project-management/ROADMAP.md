@@ -41,6 +41,12 @@ items, reorder if priorities shifted, add anything new. Now / Next / Later.
 
 ## Completed
 
+- [x] 2026-07-14 — **Top-level views epic** (v1.3.0): Skills catalog (#24),
+      Work Log — commits chart + list + standup copy + overview Today line
+      (#25), Roadmap aggregator (#26), per-day Claude token chart with a
+      transcript cache (#27). All render-path only; `views.py` new stdlib
+      sibling module.
+
 - [x] 2026-07-12 — Auto-populate epic (#15), P1→P3.2 merged: local discovery +
       resolver (#16), provenance badge (#17), P2 auto-maps (#18), P3.1 GitHub
       auth — keychain token (#19), P3.2 GitHub sync — repos→cache→cards incl.

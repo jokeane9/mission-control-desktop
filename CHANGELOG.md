@@ -7,6 +7,23 @@ platforms.
 
 ## [Unreleased]
 
+## [1.3.0] — 2026-07-14
+### Added
+- Three new top-level sidebar views alongside the overview:
+  - **Skills** — a searchable catalog of your Claude Code skills (installed
+    plugins, each project's `.claude/skills/`, and `~/.claude/skills/`),
+    grouped by source with count badges and invoke hints.
+  - **Work Log** — your own commits across every dashboard repo: a
+    commits-per-day chart plus a day-grouped commit list (repo · message ·
+    time), filtered by Today / Week / Month / 3 months, with a
+    **Copy as standup** button (yesterday's commits → clipboard).
+  - **Roadmap** — every project's `ROADMAP.md` Now/Next sections in one
+    place, each linked to the full file.
+- Work Log also charts your per-day Claude Code token usage (parsed from
+  `~/.claude` session transcripts with a per-file cache) as a second small
+  chart sharing the time axis.
+- The overview gains a "Today · N commits across M repos" line.
+
 ## [1.2.2] — 2026-07-13
 ### Fixed
 - Scrollbars now match the dark theme instead of rendering as bright white/grey
