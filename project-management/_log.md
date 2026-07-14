@@ -124,3 +124,27 @@ overview) in four branch→PR→green-CI→merge cycles, then released v1.3.0.
   `generate.DATA` too.
 
 **Released:** v1.3.0 (tag → CI builds both platforms → Release → tap bump).
+
+---
+
+## 2026-07-14 (session 2) — PM scratchpad tab + PRODUCT.md → v1.4.0
+
+**What happened:** Added a fifth top-level view and the first product doc, on
+branch `pm-admin-and-docs` → PR #28 → v1.4.0.
+
+- **PM tab** — a local admin scratchpad (view id `pm`). One free-text file
+  (`pm_notes.md` in the data dir, gitignored) rendered into a textarea and
+  autosaved via a new `save_notes` bridge method (debounced on input; flushed
+  on visibilitychange/beforeunload so the 15-min meta-refresh can't drop
+  unsaved text). Bridge-gated like the config editor: read-only in a plain
+  browser, editable in the packaged app. `views.load_notes`/`save_notes` pure +
+  tested.
+- **PRODUCT.md** — first canonical *product* doc (distinct from the
+  project-management/ process docs): one-liner, who it's for, principles,
+  non-goals, success north star, and open product questions written Q&A-style —
+  incl. the deliberate "no sync / no login, it's a different product" stance
+  that came out of this session's questions.
+
+**Decision captured (not built):** cross-device sync / accounts collide with
+the local-first, no-server, no-accounts principle. Parked as a conscious pivot
+question in PRODUCT.md, not a feature.

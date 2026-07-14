@@ -229,6 +229,31 @@ def test_collect_and_render_roadmaps():
     assert "No ROADMAP.md found" in V.roadmaps_html([])
 
 
+def test_notes_roundtrip():
+    tmp = tempfile.mkdtemp()
+    path = os.path.join(tmp, "pm_notes.md")
+    assert V.load_notes(path) == ""                     # nothing saved yet
+    ok, err = V.save_notes(path, "line one\nline two")
+    assert ok and err == ""
+    assert V.load_notes(path) == "line one\nline two"
+    ok, _ = V.save_notes(path, "")                      # clearing is allowed
+    assert ok and V.load_notes(path) == ""
+    ok, _ = V.save_notes(path, None)                    # non-str coerced, no crash
+    assert ok and V.load_notes(path) == ""
+    # unwritable target → (False, error), never raises
+    ok, err = V.save_notes(os.path.join(tmp, "nope", "x.md"), "hi")
+    assert not ok and err
+
+
+def test_notes_html():
+    h = V.notes_html("a <script>x</script> & b")
+    assert "a &lt;script&gt;x&lt;/script&gt; &amp; b" in h   # content escaped
+    assert 'id="pmpad"' in h and "readonly" in h and "save_notes" in h
+    assert "nobridgeonly" in h and "editonly" in h
+    # a </textarea> in the notes can't break out of the pad — only the template's closer survives
+    assert V.notes_html("</textarea>").count("</textarea>") == 1
+
+
 if __name__ == "__main__":
     fails = 0
     for fn in sorted(k for k in list(globals()) if k.startswith("test_")):
