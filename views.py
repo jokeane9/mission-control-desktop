@@ -9,12 +9,16 @@ Views:
   Work Log — the user's own commits across every dashboard repo, as a
              per-day chart + day-grouped list with a Today/Week/Month/3-months
              filter and a "Copy as standup" button.
+  Roadmap  — every project's ROADMAP.md in one place: the Now/Next sections
+             (or the top items when a roadmap has neither), linked to the file.
 """
 import datetime
 import html
 import json
 import os
+import re
 import subprocess
+from pathlib import Path
 
 CLAUDE_DIR = os.path.expanduser("~/.claude")
 DESC_MAX = 160          # one-line description budget per skill row
@@ -339,6 +343,103 @@ function wlFallbackCopy(txt){
 }
 wlRender();
 </script>"""
+
+
+# --------------------------------------------------------------------------- #
+# Roadmap — the Now/Next of every project that keeps a ROADMAP.md.
+# --------------------------------------------------------------------------- #
+ROADMAP_LOCATIONS = ("project-management/ROADMAP.md", "docs/ROADMAP.md", "ROADMAP.md")
+ROADMAP_ITEMS_MAX = 8           # per section; the full file is one click away
+_MD_LINK = re.compile(r"\[([^\]]*)\]\([^)]*\)")
+_ITEM = re.compile(r"^\s{0,3}(?:[-*+]|\d+\.)\s+(.*)")
+
+
+def _clean_item(text):
+    """One roadmap bullet → plain one-liner (checkbox/link/emphasis stripped)."""
+    text = re.sub(r"^\[[ xX]\]\s*", "", text.strip())
+    text = _MD_LINK.sub(r"\1", text)
+    text = text.replace("**", "").replace("`", "")
+    text = " ".join(text.split())
+    return text[:199] + "…" if len(text) > 200 else text
+
+
+def parse_roadmap(text):
+    """{'now': […], 'next': […], 'top': […]} — unchecked bullets under the Now
+    and Next headings; `top` is the file's first bullets, the fallback when a
+    roadmap uses neither heading."""
+    sections = {"now": [], "next": [], "top": []}
+    current = None
+    for line in text.splitlines():
+        if line.startswith("## "):
+            head = line[3:].strip().lower()
+            current = ("now" if head.startswith("now")
+                       else "next" if head.startswith("next") else None)
+            continue
+        m = _ITEM.match(line)
+        if not m or m.group(1).lstrip().startswith("[x]") or m.group(1).lstrip().startswith("[X]"):
+            continue
+        item = _clean_item(m.group(1))
+        if not item:
+            continue
+        if current:
+            sections[current].append(item)
+        if len(sections["top"]) < ROADMAP_ITEMS_MAX:
+            sections["top"].append(item)
+    return sections
+
+
+def collect_roadmaps(project_dirs):
+    """[{name, file, rel, now, next, top}, …] for every project that has a
+    roadmap in one of the conventional spots (first hit wins)."""
+    out = []
+    for name, pdir in sorted(project_dirs):
+        root = os.path.expanduser(pdir)
+        for rel in ROADMAP_LOCATIONS:
+            f = os.path.join(root, rel)
+            if not os.path.isfile(f):
+                continue
+            try:
+                sec = parse_roadmap(open(f, encoding="utf-8", errors="ignore").read())
+            except Exception:
+                break
+            out.append({"name": name, "file": f, "rel": rel, **sec})
+            break
+    return out
+
+
+def roadmaps_html(roadmaps):
+    """The Roadmap view body: one card per project, Now/Next (or top items),
+    each titled with a link to the full file."""
+    esc = html.escape
+    out = [f'''<div class="dhead"><span class="dname">Roadmap</span>
+    <span class="dthesis">{len(roadmaps)} projects with a ROADMAP.md</span></div>''']
+    if not roadmaps:
+        out.append('<div class="vempty">No ROADMAP.md found. Looked for '
+                   + ", ".join(ROADMAP_LOCATIONS) + " in each project.</div>")
+
+    def items(label, arr):
+        rows = [f'<div class="rmsec">{label}</div>']
+        for it in arr[:ROADMAP_ITEMS_MAX]:
+            rows.append(f'<div class="rmitem">{esc(it)}</div>')
+        if len(arr) > ROADMAP_ITEMS_MAX:
+            rows.append(f'<div class="rmmore">+{len(arr) - ROADMAP_ITEMS_MAX} more</div>')
+        return "".join(rows)
+
+    for r in roadmaps:
+        body = ""
+        if r["now"]:
+            body += items("Now", r["now"])
+        if r["next"]:
+            body += items("Next", r["next"])
+        if not body:
+            body = (items("Top items", r["top"]) if r["top"]
+                    else '<div class="rmmore">roadmap is empty</div>')
+        uri = esc(Path(r["file"]).as_uri())
+        out.append(f'''<div class="sgroup">
+  <div class="sgtitle">{esc(r["name"])}<a class="rmlink" href="{uri}">{esc(r["rel"])}</a></div>
+  {body}
+</div>''')
+    return "".join(out)
 
 
 def skills_html(grouped):
