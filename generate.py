@@ -7,6 +7,7 @@ Design language matches codebase-viz/vizstack (GitHub-dark, SF Mono).
 import json, subprocess, os, sys, html, datetime, time, shutil, webbrowser
 from pathlib import Path
 import resolve  # sibling: discover() + resolve() — offline auto-populate (P1)
+import views    # sibling: top-level views (Skills catalog, …)
 
 APP_NAME = "Mission Control"
 FROZEN = getattr(sys, "frozen", False)          # True inside a PyInstaller build
@@ -399,6 +400,18 @@ def main():
             f'auto-discover repos:<br><code style="font-size:11px">{esc(BASELINE)}'
             '</code></div></div>')
 
+    # Top-level views (sidebar items above the project list, like overview).
+    project_dirs = [(pr["p"]["name"], pr["path"]) for pr in projects if pr["path"]]
+    top_side, top_views = [], []
+
+    def top_view(vid, label, body):
+        top_side.append(f'<div class="sitem" id="s-{vid}" onclick="nav(\'{vid}\')">'
+                        f'<span class="dot dim"></span><span class="sname">{label}</span></div>')
+        top_views.append(f'<div class="view" id="v-{vid}">{body}</div>')
+
+    top_view("skills", "skills",
+             views.skills_html(views.collect_skills(project_dirs)))
+
     now_dt = datetime.datetime.now()
     now = now_dt.strftime("%a %b %d · %H:%M")
     stats = (f'Projects <b>{len(projects)}</b> · Needs attention <b>{totals["attn"]}</b> · '
@@ -432,7 +445,7 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--mono);font
 .sitem.on{background:var(--panel2);color:var(--ink);box-shadow:inset 2px 0 0 var(--blue)}
 .sname{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dot{width:6px;height:6px;border-radius:50%;flex:none}
-.dot.green{background:var(--green)}.dot.amber{background:var(--amber)}
+.dot.green{background:var(--green)}.dot.amber{background:var(--amber)}.dot.dim{background:var(--border2)}
 .scount{font-size:10px;color:var(--amber);border:1px solid #4d3800;background:#2a2100;
   border-radius:8px;padding:0 6px}
 .skey{font-size:9px;color:var(--faint)}
@@ -478,6 +491,27 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--mono);font
 .prov.guess{color:var(--amber);border-color:#4d3800}
 .sub{color:var(--muted)}
 .focus{margin-top:10px;border-top:1px solid var(--border);padding-top:4px}
+/* --- top-level views (Skills, …) --- */
+.vsearch{width:100%;max-width:520px;font:inherit;font-size:12.5px;color:var(--ink);
+  background:var(--panel);border:1px solid var(--border2);border-radius:6px;
+  padding:7px 10px;margin-bottom:14px}
+.vsearch:focus{outline:none;border-color:var(--blue)}
+.vsearch::placeholder{color:var(--faint)}
+.vempty{color:var(--muted);font-size:12px}
+.sgroup{background:var(--panel);border:1px solid var(--border);border-radius:8px;
+  padding:10px 14px;margin-bottom:12px;max-width:980px}
+.sgtitle{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--faint);padding:2px 0 6px;display:flex;align-items:center;gap:8px}
+.sgcount{font-size:9px;color:var(--muted);border:1px solid var(--border2);
+  border-radius:8px;padding:0 6px}
+.skrow{display:flex;gap:12px;align-items:baseline;padding:5px 0;border-top:1px solid var(--border)}
+.skname{flex:0 0 230px;color:var(--blue);font-weight:700;font-size:12px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.skdesc{flex:1;min-width:0;color:var(--muted);font-size:11.5px;
+  font-family:-apple-system,'Segoe UI','Helvetica Neue',sans-serif;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.skhint{flex:none;font-size:10px;color:var(--blue);opacity:.85}
+.skhint.auto{color:var(--faint);opacity:1}
 .statusbar{flex:none;border-top:1px solid var(--border);background:#0f1319;padding:7px 16px;
   font-size:10.5px;color:var(--muted);display:flex;justify-content:space-between}
 .statusbar b{color:var(--ink);font-weight:700}
@@ -538,6 +572,7 @@ body.nobridge .editonly{display:none}
   <div class="side">
     <div class="brand">mission-control</div>
     <div class="sitem on" id="s-overview" onclick="nav('overview')"><span class="dot green"></span><span class="sname">overview</span><span class="skey">⌘0</span></div>
+    %%TOPSIDE%%
     <div class="shead">Projects (%%COUNT%%)</div>
     %%SIDE%%
     <button class="addbtn editonly" onclick="openEditor()">＋ Add project</button>
@@ -545,6 +580,7 @@ body.nobridge .editonly{display:none}
   </div>
   <div class="main">
     <div class="view on" id="v-overview"><div class="grid">%%CARDS%%</div></div>
+    %%TOPVIEWS%%
     %%DETAILS%%
   </div>
 </div>
@@ -603,6 +639,17 @@ function tab(el,url){
   pane.classList.add('on');
   var f=pane.querySelector('iframe');
   if(f&&!f.src)f.src=f.dataset.src;
+}
+function skillFilter(q){
+  q=q.trim().toLowerCase();
+  document.querySelectorAll('#v-skills .sgroup').forEach(function(g){
+    var vis=0;
+    g.querySelectorAll('.skrow').forEach(function(r){
+      var on=!q||r.getAttribute('data-q').indexOf(q)>=0;
+      r.style.display=on?'':'none';if(on)vis++;
+    });
+    g.style.display=vis?'':'none';
+  });
 }
 function refreshGit(btn){
   // Rescan every repo's git and rewrite the page. In the pywebview app this
@@ -748,6 +795,8 @@ function ghDisconnect(){
     page = (tpl.replace("%%SECS%%", str(REFRESH_MIN * 60))
                .replace("%%GENTS%%", str(int(time.time())))
                .replace("%%COUNT%%", str(len(projects)))
+               .replace("%%TOPSIDE%%", "".join(top_side))
+               .replace("%%TOPVIEWS%%", "".join(top_views))
                .replace("%%SIDE%%", "".join(side))
                .replace("%%CARDS%%", "".join(cards))
                .replace("%%DETAILS%%", "".join(details))
