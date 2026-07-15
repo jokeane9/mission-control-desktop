@@ -7,7 +7,28 @@ platforms.
 
 ## [Unreleased]
 
-## [1.5.0] — 2026-07-14
+## [1.6.0] — 2026-07-14
+### Added
+- **Groups are folders now.** Click a group in the sidebar to filter the main
+  view to just that group's projects, with a breadcrumb back to all. The
+  chevron still collapses the group in place — click targets are split so the
+  two never collide.
+- **Drag-and-drop** the sidebar: drag a group header to reorder groups, or drag
+  a project into another group to regroup it. Your arrangement is remembered
+  per machine.
+- **Attention rollup dots** on group headers — a collapsed group still shows an
+  amber dot when a project inside it needs you.
+### Changed
+- The overview grid and each sidebar group are now ordered **needs-attention
+  first, then by tier**, so the loudest thing on screen is the thing that needs
+  you — not whatever was discovered first.
+- Cards with no thesis fall back to the last commit message instead of blank space.
+- "Ungrouped" is now **Other**.
+### Fixed
+- **Keyboard accessibility:** every sidebar item, tab, card, and group is now
+  focusable and activatable with Enter/Space, with a visible focus ring.
+- Muted/secondary text now meets WCAG AA contrast on the dark theme; added a
+  reduced-motion preference.
 ### Added
 - **Project groups in the sidebar.** The flat project list is now organized into
   named, collapsible sections (collapse state remembered per machine).
