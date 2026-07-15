@@ -495,7 +495,7 @@ def main():
 
     tpl = """<!doctype html><html><head><meta charset="utf-8">
 <title>Mission Control</title>
-<meta http-equiv="refresh" content="%%SECS%%">
+<!-- periodic reload is JS-driven (mcReload) so it can defer while the PM scratchpad has unsaved edits -->
 <style>
 :root{--bg:#0d1117;--panel:#161b22;--panel2:#1c2129;--border:#21262d;--border2:#30363d;
   --ink:#c9d1d9;--muted:#8b949e;--faint:#868f9c;--faintline:#6e7681;--blue:#58a6ff;--green:#3fb950;--amber:#d29922;
@@ -618,8 +618,10 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--mono);font
 .crumbsep{color:var(--faint);font-size:10px}
 .crumbnow{font-weight:700;text-transform:uppercase;letter-spacing:.06em;font-size:10px;color:var(--ink)}
 /* --- work log --- */
-.todayline{font-size:11.5px;color:var(--muted);margin-bottom:12px}
+.todayline{font-size:12px;color:var(--muted);margin-bottom:12px}
 .todayline b{color:var(--ink)}
+.todayline .warn{color:var(--amber);font-weight:700}
+.todayline .ok{color:var(--green);font-weight:700}
 .wlbar{display:flex;align-items:center;gap:6px;margin-bottom:14px;max-width:980px}
 .fbtn{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
   color:var(--faint);padding:4px 10px;cursor:pointer;border:1px solid var(--border);
@@ -782,6 +784,16 @@ body:not(.nobridge) .nobridgeonly{display:none}
      el.style.color='#ff6b6b';el.style.fontWeight='700';
      el.textContent='⚠ STALE — git snapshot is '+m+'m old (regen not running)';}}
  tick();setInterval(tick,30000);})();
+// Periodic reload to pick up fresh git data — but NEVER while the PM scratchpad
+// has unsaved edits or focus, so a background refresh can't eat what you're
+// typing (replaces the old blunt <meta refresh>).
+function mcReload(){
+  var pad=document.getElementById('pmpad');
+  var dirty=(typeof PM_SAVED!=='undefined'&&!PM_SAVED)||(pad&&document.activeElement===pad);
+  if(dirty){setTimeout(mcReload,4000);return;}   // check back until the pad settles
+  location.reload();
+}
+setTimeout(mcReload,%%SECS%%*1000);
 var NAMES=%%NAMES%%;
 var FIELDS=%%FIELDS%%;          // [key,label,placeholder,required] — form source of truth
 var PROJECTS_RAW=%%PROJECTS_RAW%%;   // raw config entries, for prefilling edits
@@ -1057,7 +1069,7 @@ function ghDisconnect(){
                .replace("%%COUNT%%", str(len(projects)))
                .replace("%%TOPSIDE%%", "".join(top_side))
                .replace("%%TOPVIEWS%%", "".join(top_views))
-               .replace("%%TODAY%%", views.today_line(worklog))
+               .replace("%%TODAY%%", views.hero_line(worklog, totals))
                .replace("%%SIDE%%", "".join(side))
                .replace("%%CARDS%%", "".join(cards))
                .replace("%%DETAILS%%", "".join(details))

@@ -124,6 +124,16 @@ def test_today_line():
     assert "1 commit</b>" in one and "1 repo</b>" in one   # singular forms
 
 
+def test_hero_line():
+    now = int(time.time())
+    warn = V.hero_line([{"r": "a", "t": now, "s": "x"}], {"attn": 2, "dirty": 5, "ahead": 1})
+    assert "need attention" in warn and "2 projects" in warn
+    assert "5 uncommitted" in warn and "1 unpushed" in warn and "1 commit today" in warn
+    clear = V.hero_line([{"r": "a", "t": now, "s": "x"}], {"attn": 0})
+    assert "All clear" in clear and "1 commit today" in clear
+    assert "attention" not in clear
+
+
 def test_worklog_html():
     h = V.worklog_html([{"r": "one", "t": 1700000000, "s": "close </script> tag"}])
     assert "<\\/script> tag" in h                       # embedded JSON can't break out
