@@ -216,8 +216,10 @@ def test_grouped_sidebar_render():
     generate.main()
     h = open(generate.INDEX).read()
     assert 'class="sgrouphd"' in h and "toggleGroup" in h          # grouped, collapsible
+    assert "openFolder(" in h and 'id="sidegroups"' in h           # folder filter + drag container
     assert 'id="ghd-shelf"' in h                                   # the shelf family header
-    assert 'id="ghd-ungrouped"' in h                              # the loner falls here
+    assert 'id="ghd-other"' in h                                   # the loner falls under "Other"
+    assert 'data-group="shelf"' in h and 'data-proj=' in h         # cards carry group + name for filter/drag
 
 
 if __name__ == "__main__":

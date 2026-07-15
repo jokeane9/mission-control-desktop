@@ -328,6 +328,15 @@ def rows_html(p, g, path, prov=None):
             + row("Last", f'<span class="sub">{esc(g["last_msg"])}</span>')
             + (f'<div class="focus">{row("Focus", esc(focus), "focus")}</div>' if focus else ""))
 
+
+def group_slug(s):
+    """Stable id for a group name (shared by the sidebar header and card filter)."""
+    return "".join(c if c.isalnum() else "-" for c in (s or "").lower()).strip("-") or "x"
+
+
+_TIER_RANK = {"major": 0, "tools": 1, "minor": 2}
+
+
 def main():
     cfg = load_config()
     # Read-only cache written out-of-band by github_sync.py (P3.2). {} if not
@@ -365,6 +374,12 @@ def main():
             pr["p"]["group"] = grp
             pr["prov"]["group"] = "heuristic"
 
+    # Triage order: needs-attention first, then by tier (major > tools > minor),
+    # stable within — so the overview grid and each sidebar group read top-down
+    # by urgency instead of raw discovery order.
+    projects.sort(key=lambda pr: (not pr["attn"],
+                                  _TIER_RANK.get((pr["p"].get("tier") or "").lower(), 3)))
+
     esc = html.escape
     side, cards, details = [], [], []
     for i, pr in enumerate(projects):
@@ -376,9 +391,12 @@ def main():
         # the shortcut number follows the final (grouped) sidebar order
         pr["sinner"] = f'{dot}<span class="sname">{n}</span>{badge}'
         accent = ' accent' if pr["attn"] else ""
-        cards.append(f'''<div class="card{accent}" onclick="nav('{n}')">
+        gslug = group_slug(p.get("group") or "other")
+        # blank thesis on an auto-discovered repo → fall back to the last commit
+        blurb = esc(p.get("thesis") or g.get("last_msg") or "")
+        cards.append(f'''<div class="card{accent}" data-group="{gslug}" data-proj="{n}" tabindex="0" role="button" onclick="nav('{n}')">
   <div class="ctop"><span class="cname">{n}</span><span class="age">{esc(g["last_rel"] or "")}</span></div>
-  <div class="thesis">{esc(p.get("thesis", ""))}</div>
+  <div class="thesis">{blurb}</div>
   <div class="chips">{chips(g)}</div>
 </div>''')
         tabs = ['<span class="tab on" onclick="tab(this,null)">overview</span>']
@@ -416,23 +434,30 @@ def main():
     for idx, pr in enumerate(flat):
         fn = esc(pr["p"]["name"])
         skey = f'<span class="skey">⌘{idx + 1}</span>' if idx < 9 else ""
-        pr["sitem"] = (f'<div class="sitem" id="s-{fn}" onclick="nav(\'{fn}\')">'
+        pr["sitem"] = (f'<div class="sitem" id="s-{fn}" tabindex="0" role="button" '
+                       f'draggable="true" data-proj="{fn}" onclick="nav(\'{fn}\')">'
                        f'{pr["sinner"]}{skey}</div>')
     if not has_groups:
         side = [pr["sitem"] for pr in flat]            # flat list, unchanged behaviour
     else:
-        def _slug(s):
-            return "".join(c if c.isalnum() else "-" for c in s.lower()).strip("-") or "x"
-        side = []
+        blocks = []
         for key in gorder:
-            label = key or "ungrouped"
-            gid = _slug(label)
+            label = "Other" if key == "" else key
+            gid = group_slug(label)
             body = "".join(pr["sitem"] for pr in groups[key])
-            side.append(
-                f'<div class="sgrouphd" id="ghd-{gid}" onclick="toggleGroup(\'{gid}\')">'
-                f'<span class="chev">▾</span><span class="gname">{esc(label)}</span>'
+            # rollup: a collapsed group still signals it holds a repo needing you
+            attn_dot = ('<span class="dot amber gattn" title="a project here needs you"></span>'
+                        if any(pr["attn"] for pr in groups[key]) else "")
+            blocks.append(
+                f'<div class="sgroup" data-gid="{gid}">'
+                f'<div class="sgrouphd" id="ghd-{gid}" draggable="true" role="button" '
+                f'tabindex="0" onclick="openFolder(\'{gid}\',this)">'
+                f'<span class="chev" title="collapse" '
+                f'onclick="event.stopPropagation();toggleGroup(\'{gid}\')">▾</span>'
+                f'<span class="gname">{esc(label)}</span>{attn_dot}'
                 f'<span class="gcount">{len(groups[key])}</span></div>'
-                f'<div class="sgroupbody" id="g-{gid}">{body}</div>')
+                f'<div class="sgroupbody" id="g-{gid}">{body}</div></div>')
+        side = ['<div id="sidegroups">' + "".join(blocks) + '</div>']
     flat_names = [pr["p"]["name"] for pr in flat]
 
     if not projects:
@@ -473,9 +498,13 @@ def main():
 <meta http-equiv="refresh" content="%%SECS%%">
 <style>
 :root{--bg:#0d1117;--panel:#161b22;--panel2:#1c2129;--border:#21262d;--border2:#30363d;
-  --ink:#c9d1d9;--muted:#8b949e;--faint:#6e7681;--blue:#58a6ff;--green:#3fb950;--amber:#d29922;
+  --ink:#c9d1d9;--muted:#8b949e;--faint:#868f9c;--faintline:#6e7681;--blue:#58a6ff;--green:#3fb950;--amber:#d29922;
   --mono:'SF Mono','Fira Code','Cascadia Code',Consolas,ui-monospace,Menlo,monospace}
 *{box-sizing:border-box}
+/* keyboard focus is visible everywhere; mouse users never see it */
+:focus-visible{outline:2px solid var(--blue);outline-offset:2px;border-radius:4px}
+[tabindex],.sitem,.tab,.card,.fbtn,.sgrouphd,.crumblink{cursor:pointer}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
 /* dark, muted scrollbars — the default WebKit ones render bright against the theme */
 ::-webkit-scrollbar{width:11px;height:11px}
 ::-webkit-scrollbar-track{background:transparent}
@@ -505,7 +534,7 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--mono);font
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px;align-content:start}
 .card{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:14px 16px;cursor:pointer}
 .card:hover{border-color:var(--border2);background:var(--panel2)}
-.card.accent{box-shadow:inset 3px 0 0 var(--amber)}
+.card.accent{box-shadow:inset 3px 0 0 var(--amber);background:linear-gradient(90deg,rgba(210,153,34,.06),transparent 40%)}
 .ctop{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
 .cname{font-weight:700;color:var(--blue)}
 .age{font-size:10px;color:var(--faint);white-space:nowrap}
@@ -567,12 +596,27 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--mono);font
   letter-spacing:.1em;text-transform:uppercase;color:var(--faint);
   padding:9px 16px 5px;cursor:pointer;user-select:none}
 .sgrouphd:hover{color:var(--muted)}
-.sgrouphd .chev{font-size:8px;display:inline-block;transition:transform .12s;width:8px}
+.sgrouphd .chev{font-size:9px;display:inline-block;transition:transform .12s;
+  width:16px;text-align:center;margin:-4px 0;padding:4px 0;border-radius:3px}
+.sgrouphd .chev:hover{background:var(--border)}
 .sgrouphd.collapsed .chev{transform:rotate(-90deg)}
 .sgrouphd.collapsed+.sgroupbody{display:none}
+.sgrouphd.active{color:var(--blue);box-shadow:inset 2px 0 0 var(--blue)}
 .gname{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gattn{width:6px;height:6px;flex:none}
 .gcount{font-size:9px;color:var(--faint);border:1px solid var(--border2);
   border-radius:8px;padding:0 5px;font-weight:400}
+/* drag-and-drop: reorder groups, move a project between groups */
+.sgroup.dragging{opacity:.4}
+.sitem.dragging{opacity:.4}
+.sgroup.dropinto>.sgrouphd{box-shadow:inset 0 0 0 1px var(--blue)}
+.sgrouphd[draggable=true]{cursor:grab}
+/* folder breadcrumb (main area, shown when a group folder is open) */
+.crumb{display:flex;align-items:center;gap:8px;margin-bottom:12px;font-size:12px}
+.crumblink{color:var(--blue);cursor:pointer}
+.crumblink:hover{text-decoration:underline}
+.crumbsep{color:var(--faint);font-size:10px}
+.crumbnow{font-weight:700;text-transform:uppercase;letter-spacing:.06em;font-size:10px;color:var(--ink)}
 /* --- work log --- */
 .todayline{font-size:11.5px;color:var(--muted);margin-bottom:12px}
 .todayline b{color:var(--ink)}
@@ -625,7 +669,7 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--mono);font
   font-family:var(--mono);font-size:12.5px;line-height:1.6;color:var(--ink);
   background:var(--panel);border:1px solid var(--border);border-radius:8px;
   padding:14px 16px;tab-size:2}
-.pmpad:focus{outline:none;border-color:var(--border2)}
+.pmpad:focus{outline:none;border-color:var(--blue)}
 .pmpad::placeholder{color:var(--faint)}
 .pmpad[readonly]{opacity:.85;cursor:default}
 .pmhint{font-size:10px;color:var(--faint);margin:8px 0 0 2px;max-width:980px}
@@ -697,7 +741,9 @@ body:not(.nobridge) .nobridgeonly{display:none}
     <div class="editonly" id="ghbox"></div>
   </div>
   <div class="main">
-    <div class="view on" id="v-overview"><div class="todayline">%%TODAY%%</div><div class="grid">%%CARDS%%</div></div>
+    <div class="view on" id="v-overview"><div class="todayline">%%TODAY%%</div>
+      <div class="crumb" id="crumb" style="display:none"><span class="crumblink" tabindex="0" role="button" onclick="clearFolder()">‹ All projects</span><span class="crumbsep">▸</span><span class="crumbnow" id="crumbnow"></span></div>
+      <div class="grid">%%CARDS%%</div></div>
     %%TOPVIEWS%%
     %%DETAILS%%
   </div>
@@ -739,7 +785,24 @@ body:not(.nobridge) .nobridgeonly{display:none}
 var NAMES=%%NAMES%%;
 var FIELDS=%%FIELDS%%;          // [key,label,placeholder,required] — form source of truth
 var PROJECTS_RAW=%%PROJECTS_RAW%%;   // raw config entries, for prefilling edits
+function clearFolder(){
+  document.querySelectorAll('#v-overview .card').forEach(function(c){c.style.display='';});
+  var cr=document.getElementById('crumb');if(cr)cr.style.display='none';
+  document.querySelectorAll('.sgrouphd.active').forEach(function(h){h.classList.remove('active');});
+}
+function openFolder(gid,hd){
+  nav('overview');                              // grid visible (also clears prior folder)
+  var label=hd?hd.querySelector('.gname').textContent:gid, shown=0;
+  document.querySelectorAll('#v-overview .card').forEach(function(c){
+    var on=c.getAttribute('data-group')===gid; c.style.display=on?'':'none'; if(on)shown++;
+  });
+  var cn=document.getElementById('crumbnow');if(cn)cn.textContent=label+'  '+shown;
+  var cr=document.getElementById('crumb');if(cr)cr.style.display='flex';
+  if(hd)hd.classList.add('active');
+  location.hash='g/'+gid;
+}
 function nav(n){
+  clearFolder();
   document.querySelectorAll('.view').forEach(function(v){v.classList.remove('on')});
   document.querySelectorAll('.sitem').forEach(function(s){s.classList.remove('on')});
   var v=document.getElementById('v-'+n), s=document.getElementById('s-'+n);
@@ -770,6 +833,69 @@ function toggleGroup(gid){
   Object.keys(c).forEach(function(gid){if(c[gid]){
     var hd=document.getElementById('ghd-'+gid);if(hd)hd.classList.add('collapsed');}});
 }catch(e){}})();
+// keyboard: Enter/Space activates any focusable nav element (div-based controls)
+document.addEventListener('keydown',function(e){
+  if((e.key==='Enter'||e.key===' ')&&e.target.matches&&
+     e.target.matches('.sitem,.tab,.card,.fbtn,.sgrouphd,.crumblink,.chev')){
+    e.preventDefault();e.target.click();
+  }
+});
+// --- sidebar drag: reorder groups; drag a project into another group ---
+(function(){
+  var cont=document.getElementById('sidegroups'); if(!cont)return;
+  var dragEl=null,dragType=null;
+  var esc=function(s){return (window.CSS&&CSS.escape)?CSS.escape(s):s;};
+  function saveOrder(){try{localStorage.setItem('mcGroupOrder',JSON.stringify(
+    [].map.call(cont.querySelectorAll('.sgroup'),function(g){return g.getAttribute('data-gid');})));}catch(e){}}
+  function saveItems(){var m={};cont.querySelectorAll('.sgroup').forEach(function(g){
+    var gid=g.getAttribute('data-gid');
+    g.querySelectorAll('.sitem').forEach(function(it){m[it.getAttribute('data-proj')]=gid;});});
+    try{localStorage.setItem('mcItemGroup',JSON.stringify(m));}catch(e){}}
+  function cardTo(proj,gid){var c=document.querySelector('#v-overview .card[data-proj="'+esc(proj)+'"]');
+    if(c)c.setAttribute('data-group',gid);}
+  function recount(){cont.querySelectorAll('.sgroup').forEach(function(g){
+    var n=g.querySelectorAll('.sitem').length,c=g.querySelector('.gcount');
+    if(c)c.textContent=n; g.style.display=n?'':'none';});}
+  cont.addEventListener('dragstart',function(e){
+    var it=e.target.closest('.sitem'),hd=e.target.closest('.sgrouphd');
+    if(it){dragType='item';dragEl=it;}
+    else if(hd){dragType='group';dragEl=hd.parentNode;}
+    else return;
+    e.dataTransfer.effectAllowed='move';try{e.dataTransfer.setData('text/plain','x');}catch(_){}
+    setTimeout(function(){if(dragEl)dragEl.classList.add('dragging');},0);
+  });
+  cont.addEventListener('dragend',function(){
+    if(dragEl)dragEl.classList.remove('dragging');
+    cont.querySelectorAll('.dropinto').forEach(function(x){x.classList.remove('dropinto');});
+    dragEl=null;dragType=null;});
+  cont.addEventListener('dragover',function(e){
+    if(!dragEl)return; e.preventDefault(); e.dataTransfer.dropEffect='move';
+    var g=e.target.closest('.sgroup'); if(!g)return;
+    if(dragType==='group'){ if(g===dragEl)return;
+      var r=g.getBoundingClientRect();
+      cont.insertBefore(dragEl,(e.clientY<r.top+r.height/2)?g:g.nextSibling);
+    }else{ cont.querySelectorAll('.dropinto').forEach(function(x){x.classList.remove('dropinto');});
+      g.classList.add('dropinto'); }});
+  cont.addEventListener('drop',function(e){
+    if(!dragEl)return; e.preventDefault();
+    var g=e.target.closest('.sgroup');
+    if(dragType==='group'){ saveOrder(); }
+    else if(dragType==='item'&&g){
+      g.querySelector('.sgroupbody').appendChild(dragEl);
+      cardTo(dragEl.getAttribute('data-proj'), g.getAttribute('data-gid'));
+      recount(); saveItems(); }
+    cont.querySelectorAll('.dropinto').forEach(function(x){x.classList.remove('dropinto');});});
+  // restore saved arrangement (item placement, then group order)
+  try{
+    var im=JSON.parse(localStorage.getItem('mcItemGroup')||'{}');
+    Object.keys(im).forEach(function(proj){
+      var it=cont.querySelector('.sitem[data-proj="'+esc(proj)+'"]'), body=document.getElementById('g-'+im[proj]);
+      if(it&&body){body.appendChild(it);cardTo(proj,im[proj]);}});
+    JSON.parse(localStorage.getItem('mcGroupOrder')||'[]').forEach(function(gid){
+      var g=cont.querySelector('.sgroup[data-gid="'+esc(gid)+'"]'); if(g)cont.appendChild(g);});
+    recount();
+  }catch(e){}
+})();
 function skillFilter(q){
   q=q.trim().toLowerCase();
   document.querySelectorAll('#v-skills .sgroup').forEach(function(g){
@@ -799,7 +925,10 @@ document.addEventListener('keydown',function(e){
   var i=parseInt(e.key,10);
   if(i>=1&&i<=NAMES.length){nav(NAMES[i-1]);e.preventDefault();}
 });
-(function(){var h=location.hash.replace('#','');if(h.indexOf('p/')===0)nav(h.slice(2));})();
+(function(){var h=location.hash.replace('#','');
+  if(h.indexOf('p/')===0)nav(h.slice(2));
+  else if(h.indexOf('g/')===0){var gid=h.slice(2),hd=document.getElementById('ghd-'+gid);openFolder(gid,hd);}
+})();
 
 // --- config editor (only usable through the pywebview Python bridge) ---
 (function(){
