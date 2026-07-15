@@ -56,6 +56,7 @@ PROJECT_FIELDS = [
     ("name",     "Name",      "short-name",                        True),
     ("path",     "Path",      "~/code/my-app  (a local git repo)", True),
     ("tier",     "Tier",      "major / tools / minor",             False),
+    ("group",    "Group",     "sidebar group (blank = auto-organize)", False),
     ("thesis",   "Thesis",    "one line: what this project is",    False),
     ("prod",     "Prod URL",  "https://example.com",               False),
     ("prod_note","Prod note", "hosting · rough monthly cost",      False),
@@ -355,6 +356,15 @@ def main():
         projects.append({"p": facts, "g": g, "maps": maps, "path": path,
                          "attn": attn, "prov": prov})
 
+    # Auto-organize: infer a sidebar group for any project the user hasn't
+    # grouped by hand. Manual groups (resolved above) always win.
+    autog = resolve.auto_groups([pr["p"] for pr in projects])
+    for pr in projects:
+        grp = autog.get(pr["p"]["name"])
+        if grp:
+            pr["p"]["group"] = grp
+            pr["prov"]["group"] = "heuristic"
+
     esc = html.escape
     side, cards, details = [], [], []
     for i, pr in enumerate(projects):
@@ -362,10 +372,9 @@ def main():
         n = esc(p["name"])
         dot = f'<span class="dot amber"></span>' if pr["attn"] else '<span class="dot green"></span>'
         badge = f'<span class="scount">{g["dirty"]}</span>' if g["dirty"] else ""
-        side.append(f'<div class="sitem" id="s-{n}" onclick="nav(\'{n}\')">'
-                    f'{dot}<span class="sname">{n}</span>{badge}'
-                    f'<span class="skey">⌘{i+1}</span></div>' if i < 9 else
-                    f'<div class="sitem" id="s-{n}" onclick="nav(\'{n}\')">{dot}<span class="sname">{n}</span>{badge}</div>')
+        # inner content only; the ⌘ key + wrapper are added after grouping, so
+        # the shortcut number follows the final (grouped) sidebar order
+        pr["sinner"] = f'{dot}<span class="sname">{n}</span>{badge}'
         accent = ' accent' if pr["attn"] else ""
         cards.append(f'''<div class="card{accent}" onclick="nav('{n}')">
   <div class="ctop"><span class="cname">{n}</span><span class="age">{esc(g["last_rel"] or "")}</span></div>
@@ -391,6 +400,40 @@ def main():
   <div class="tabs">{"".join(tabs)}</div>
   {"".join(panes)}
 </div>''')
+
+    # --- grouped, collapsible sidebar (auto-organized; Ungrouped last). The ⌘
+    # shortcut number and NAMES follow the final flattened sidebar order. ---
+    gorder, groups = [], {}
+    for pr in projects:
+        key = (pr["p"].get("group") or "").strip()
+        if key not in groups:
+            groups[key] = []
+            gorder.append(key)
+        groups[key].append(pr)
+    gorder = [k for k in gorder if k] + ([""] if "" in groups else [])  # ungrouped last
+    has_groups = any(gorder)                                            # any named group
+    flat = [pr for key in gorder for pr in groups[key]]
+    for idx, pr in enumerate(flat):
+        fn = esc(pr["p"]["name"])
+        skey = f'<span class="skey">⌘{idx + 1}</span>' if idx < 9 else ""
+        pr["sitem"] = (f'<div class="sitem" id="s-{fn}" onclick="nav(\'{fn}\')">'
+                       f'{pr["sinner"]}{skey}</div>')
+    if not has_groups:
+        side = [pr["sitem"] for pr in flat]            # flat list, unchanged behaviour
+    else:
+        def _slug(s):
+            return "".join(c if c.isalnum() else "-" for c in s.lower()).strip("-") or "x"
+        side = []
+        for key in gorder:
+            label = key or "ungrouped"
+            gid = _slug(label)
+            body = "".join(pr["sitem"] for pr in groups[key])
+            side.append(
+                f'<div class="sgrouphd" id="ghd-{gid}" onclick="toggleGroup(\'{gid}\')">'
+                f'<span class="chev">▾</span><span class="gname">{esc(label)}</span>'
+                f'<span class="gcount">{len(groups[key])}</span></div>'
+                f'<div class="sgroupbody" id="g-{gid}">{body}</div>')
+    flat_names = [pr["p"]["name"] for pr in flat]
 
     if not projects:
         cards.append(
@@ -519,6 +562,17 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--mono);font
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .skhint{flex:none;font-size:10px;color:var(--blue);opacity:.85}
 .skhint.auto{color:var(--faint);opacity:1}
+/* --- sidebar project groups (collapsible; auto-organized) --- */
+.sgrouphd{display:flex;align-items:center;gap:6px;font-size:9px;font-weight:700;
+  letter-spacing:.1em;text-transform:uppercase;color:var(--faint);
+  padding:9px 16px 5px;cursor:pointer;user-select:none}
+.sgrouphd:hover{color:var(--muted)}
+.sgrouphd .chev{font-size:8px;display:inline-block;transition:transform .12s;width:8px}
+.sgrouphd.collapsed .chev{transform:rotate(-90deg)}
+.sgrouphd.collapsed+.sgroupbody{display:none}
+.gname{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gcount{font-size:9px;color:var(--faint);border:1px solid var(--border2);
+  border-radius:8px;padding:0 5px;font-weight:400}
 /* --- work log --- */
 .todayline{font-size:11.5px;color:var(--muted);margin-bottom:12px}
 .todayline b{color:var(--ink)}
@@ -704,6 +758,18 @@ function tab(el,url){
   var f=pane.querySelector('iframe');
   if(f&&!f.src)f.src=f.dataset.src;
 }
+function toggleGroup(gid){
+  var hd=document.getElementById('ghd-'+gid);if(!hd)return;
+  hd.classList.toggle('collapsed');
+  try{var c=JSON.parse(localStorage.getItem('mcGroups')||'{}');
+    c[gid]=hd.classList.contains('collapsed');
+    localStorage.setItem('mcGroups',JSON.stringify(c));}catch(e){}
+}
+// restore collapsed groups from last session
+(function(){try{var c=JSON.parse(localStorage.getItem('mcGroups')||'{}');
+  Object.keys(c).forEach(function(gid){if(c[gid]){
+    var hd=document.getElementById('ghd-'+gid);if(hd)hd.classList.add('collapsed');}});
+}catch(e){}})();
 function skillFilter(q){
   q=q.trim().toLowerCase();
   document.querySelectorAll('#v-skills .sgroup').forEach(function(g){
@@ -869,7 +935,7 @@ function ghDisconnect(){
                .replace("%%STATS%%", stats)
                .replace("%%NOW%%", now)
                .replace("%%MIN%%", str(REFRESH_MIN))
-               .replace("%%NAMES%%", json.dumps([pr["p"]["name"] for pr in projects]))
+               .replace("%%NAMES%%", json.dumps(flat_names))
                .replace("%%FIELDS%%", json.dumps(PROJECT_FIELDS))
                .replace("%%PROJECTS_RAW%%",
                         json.dumps([pr["p"] for pr in projects]).replace("</", "<\\/")))

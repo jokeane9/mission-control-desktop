@@ -177,6 +177,49 @@ def test_provenance_badge():
     assert 'class="prov' not in open(generate.INDEX).read()
 
 
+def test_auto_groups():
+    F = [
+        {"name": "shelf", "path": "/p/shelf"},
+        {"name": "shelf-site", "path": "/p/shelf-site"},
+        {"name": "shelf-workbench", "path": "/p/shelf-workbench"},   # prefix family "shelf"
+        {"name": "dspy", "path": "/p/dspy"},                        # lone -> ungrouped
+        {"name": "alpha", "path": "/p/alpha", "github_url": "https://github.com/widgets/alpha"},
+        {"name": "beta",  "path": "/p/beta",  "github_url": "https://github.com/widgets/beta"},   # owner family
+        {"name": "one", "path": "/p/sub/one"},
+        {"name": "two", "path": "/p/sub/two"},                      # parent-dir family "sub"
+        {"name": "curated", "path": "/p/curated", "group": "mine"}, # manual -> untouched
+    ]
+    g = R.auto_groups(F)
+    assert g["shelf"] == g["shelf-site"] == g["shelf-workbench"] == "shelf"
+    assert "dspy" not in g                                          # singleton stays ungrouped
+    assert g["alpha"] == g["beta"] == "widgets"                    # owner family (no shared name prefix)
+    assert g["one"] == g["two"] == "sub"                           # non-dominant parent folder
+    assert "curated" not in g                                       # manual group never overwritten
+
+    # a too-generic / short prefix is not a family even with >= 2 repos
+    g2 = R.auto_groups([{"name": "api-x", "path": "/p/api-x"},
+                        {"name": "api-y", "path": "/p/api-y"}])
+    assert "api-x" not in g2 and "api-y" not in g2
+    # `group` is a resolvable key so a manual override flows through resolve()
+    assert "group" in R.PROJECT_KEYS
+
+
+def test_grouped_sidebar_render():
+    tmp = tempfile.mkdtemp()
+    root = os.path.join(tmp, "code"); os.makedirs(root)
+    for n in ["shelf", "shelf-site", "shelf-workbench", "loner"]:
+        mkrepo(root, n)
+    generate.DATA = tmp
+    generate.BASELINE = os.path.join(tmp, "baseline.json")
+    generate.INDEX = os.path.join(tmp, "index.html")
+    json.dump({"projects": [], "roots": [root]}, open(generate.BASELINE, "w"))
+    generate.main()
+    h = open(generate.INDEX).read()
+    assert 'class="sgrouphd"' in h and "toggleGroup" in h          # grouped, collapsible
+    assert 'id="ghd-shelf"' in h                                   # the shelf family header
+    assert 'id="ghd-ungrouped"' in h                              # the loner falls here
+
+
 if __name__ == "__main__":
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for t in tests:
