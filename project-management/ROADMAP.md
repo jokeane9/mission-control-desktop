@@ -7,24 +7,34 @@ items, reorder if priorities shifted, add anything new. Now / Next / Later.
 
 ## Now
 
-- [ ] Nothing in flight. `main` clean, 0 open PRs. Auto-populate P1→P3.2 all
-      merged but **not yet released** (main is ahead of the v1.1.0 tag).
+- [ ] Nothing in flight. `main` clean, released through **v1.6.0**. A full-app
+      UX audit is captured in [`UX-AUDIT.md`](UX-AUDIT.md); the interaction
+      model in [`UX-FLOWS.md`](UX-FLOWS.md).
 
 ## Next
 
-- [ ] **Verify GitHub sync with a real token** — the one deferred P3.2 check:
-      connect a fine-grained PAT (Metadata + Contents: read), hit "sync repos",
-      confirm owned repos populate and uncloned ones show "not cloned". (tonight)
-- [ ] **Cut v1.2.0** — release the auto-populate + config-editor + GitHub work
-      (`git tag v1.2.0 && git push --tags`). ⚠ First release exercising the
-      Dependabot `release.yml` action bumps (upload/download-artifact, gh-release,
-      setup-python, checkout) — watch that run; one-line reverts if any break.
-- [ ] **P3.3 — GitHub sync UI polish** ([#15](https://github.com/jokeane9/mission-control-desktop/issues/15)) —
-      last-synced timestamp, a "clone" affordance on uncloned cards, sync progress.
+- [ ] **v1.6.1 — the two UX "wrong thing" bugs** (from UX-AUDIT): PM autosave
+      races the 15-min page refresh → possible edit loss; **"Copy as standup"
+      ignores the filter and only copies yesterday** (empty on Mondays). Fix
+      first — they misbehave silently.
+- [ ] **Attention-first hero line** — replace "Today · N commits" with a
+      "what needs you" rollup on the overview. (UX-AUDIT · IA F2)
+- [ ] **Editor onboarding** — thesis before tier/group; `tier` → `<select>`;
+      path validation/`.git` check. (UX-AUDIT · detail F2–F4)
+- [ ] **Provenance made usable** — a legend + clickable "guess" → jump to that
+      field in the editor. (UX-AUDIT · detail F1/F9)
+- [ ] **GitHub error consistency** — replace native `alert()` in sync/clone with
+      inline/toast; name the real clone path. (UX-AUDIT · detail F6/F7)
+- [ ] **Design-system tightening** — consolidate the badge vocabulary
+      (`.eyebrow`/`.pill`), adopt a type-scale token set, shape-encode git state
+      for colorblindness. (UX-AUDIT · global F4/F7/F8)
 - [ ] **Windows code signing** ([#7](https://github.com/jokeane9/mission-control-desktop/issues/7)) —
-      SignPath enrollment → activates the already-wired step. (`platform:windows`, `signing`)
+      SignPath enrollment → activates the already-wired step. Owner action.
 - [ ] **winget listing** ([#8](https://github.com/jokeane9/mission-control-desktop/issues/8)) —
-      after signing. (`platform:windows`, `packaging`)
+      manifests verified/prepped; blocked on #7.
+- [ ] **Post the launch** — Show HN / r/programming / X drafts ready
+      ([#11](https://github.com/jokeane9/mission-control-desktop/issues/11) is
+      done — blog post live on killdate.dev).
 
 ## Later
 
@@ -41,6 +51,19 @@ items, reorder if priorities shifted, add anything new. Now / Next / Later.
 
 ## Completed
 
+- [x] 2026-07-14 — **Groups become folders + triage + keyboard a11y** (v1.6.0,
+      #33): click-a-group folder filter + breadcrumb, drag-and-drop reorder/move
+      (localStorage), attention rollup dots, attention→tier sort, WCAG-AA
+      contrast + keyboard operability. Built from the 5-agent UX audit
+      ([`UX-AUDIT.md`](UX-AUDIT.md), [`UX-FLOWS.md`](UX-FLOWS.md)).
+- [x] 2026-07-14 — **Auto-organized project groups** (v1.5.0, #32):
+      `resolve.auto_groups()` (name-prefix → owner → parent-dir) + collapsible
+      sidebar groups + manual `Group` editor override.
+- [x] 2026-07-14 — **macOS Open-Anyway cask caveats** (#31 + live tap): brew
+      prints the first-launch Gatekeeper steps. Real fix is notarization (#9).
+- [x] 2026-07-14 — **Regen errors are logged, not swallowed** (v1.4.1, #30):
+      `app.py._log_exc` → DATA/error.log. (After a QA false-alarm where a stale
+      instance masqueraded as a broken build — see `_log.md`.)
 - [x] 2026-07-14 — **PM scratchpad tab + canonical `PRODUCT.md`** (v1.4.0,
       #28): a local autosaving admin notes view (bridge-gated like the config
       editor; `pm_notes.md` in the data dir, gitignored) and the first product
