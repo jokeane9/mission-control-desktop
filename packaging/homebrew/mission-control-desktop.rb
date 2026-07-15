@@ -1,3 +1,6 @@
+# typed: strict
+# frozen_string_literal: true
+
 # Homebrew Cask for Mission Control (reference copy).
 #
 # The LIVE cask users install is in the tap repo jokeane9/homebrew-tap
@@ -21,7 +24,16 @@ cask "mission-control-desktop" do
 
   app "Mission Control.app"
 
-  zap trash: [
-    "~/Library/Application Support/Mission Control",
-  ]
+  zap trash: "~/Library/Application Support/Mission Control"
+
+  caveats <<~EOS
+    Mission Control isn't notarized yet, so macOS blocks it on first launch with
+    "Apple could not verify that 'Mission Control' is free of malware."
+
+    To open it (one time):
+      System Settings → Privacy & Security → scroll to Security → "Open Anyway"
+
+    Every launch after that opens normally. It's an ad-hoc-signed open-source
+    app — the source is at the homepage above.
+  EOS
 end
