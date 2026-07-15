@@ -14,8 +14,8 @@ import json, os, re, subprocess
 # Canonical card fields the renderer consumes. `path` is repo identity, handled
 # separately; everything below is what resolve() fills in.
 PROJECT_KEYS = ["name", "thesis", "tier", "prod", "prod_note", "stack", "dev",
-                "prod_env", "arch", "email", "focus", "viz_app", "viz_pipeline",
-                "hidden", "tags"]
+                "prod_env", "arch", "email", "focus", "group", "viz_app",
+                "viz_pipeline", "hidden", "tags"]
 
 _IGNORE_DIRS = {"node_modules", ".git", "dist", "build", "__pycache__", ".venv",
                 "venv", ".next", "target", "vendor", ".cache"}
@@ -382,3 +382,72 @@ def _first_existing(path, names):
         if os.path.isfile(os.path.join(path, n)):
             return n
     return ""
+
+
+# --------------------------------------------------------------------------- #
+# Auto-organize — infer a sidebar group for each repo so the user doesn't hand-
+# sort. General + offline: nothing here is user-specific. A manual `group`
+# (baseline override / in-repo block) resolves normally via PROJECT_KEYS and
+# always wins; this only fills the gaps, provenance-marked as a guess.
+# --------------------------------------------------------------------------- #
+_GROUP_MIN = 2                       # a family needs at least this many repos
+_STOP_PREFIX = {"the", "my", "app", "web", "api", "test", "new", "old"}
+
+
+def _name_prefix(name):
+    """First token of a repo name, split on - . _ or space (lowercased)."""
+    return re.split(r"[-._ ]", str(name).strip().lower(), 1)[0]
+
+
+def _owner(url):
+    """GitHub owner from an html/remote URL, lowercased ('' if none)."""
+    m = re.search(r"github\.com[/:]([^/]+)/", url or "")
+    return m.group(1).lower() if m else ""
+
+
+def auto_groups(facts_list):
+    """Given resolved project facts, return {name: group} for every project
+    that has no manual `group`. Signals, first match wins:
+      1. name-prefix family — >= _GROUP_MIN repos share a first name token
+         (shelf / shelf-site / shelf-workbench -> "shelf").
+      2. owner family — >= _GROUP_MIN ungrouped repos share a GitHub owner.
+      3. parent-dir family — >= _GROUP_MIN repos share a non-root parent folder.
+    Everything else stays ungrouped."""
+    import collections
+    names = [f.get("name", "") for f in facts_list]
+    pre_count = collections.Counter(_name_prefix(n) for n in names)
+    families = {p for p, c in pre_count.items()
+                if c >= _GROUP_MIN and len(p) >= 3 and p not in _STOP_PREFIX}
+
+    owner_count = collections.Counter(
+        _owner(f.get("github_url", "")) for f in facts_list
+        if _name_prefix(f.get("name", "")) not in families)
+    owner_fam = {o for o, c in owner_count.items() if o and c >= _GROUP_MIN}
+
+    pathed = [os.path.dirname(os.path.expanduser(f["path"]))
+              for f in facts_list if f.get("path")]
+    par_count = collections.Counter(os.path.basename(p) for p in pathed)
+    # the dominant parent is the de-facto root (e.g. ~/projects) — useless as a
+    # group; only real sub-folders shared by >= _GROUP_MIN repos count
+    dominant = par_count.most_common(1)[0][0] if par_count else None
+    par_fam = {b for b, c in par_count.items()
+               if c >= _GROUP_MIN and b != dominant}
+
+    out = {}
+    for f in facts_list:
+        if (f.get("group") or "").strip():
+            continue                                    # manual grouping wins
+        name = f.get("name", "")
+        pre = _name_prefix(name)
+        if pre in families:
+            out[name] = pre
+            continue
+        ow = _owner(f.get("github_url", ""))
+        if ow in owner_fam:
+            out[name] = ow
+            continue
+        if f.get("path"):
+            par = os.path.basename(os.path.dirname(os.path.expanduser(f["path"])))
+            if par in par_fam:
+                out[name] = par
+    return out

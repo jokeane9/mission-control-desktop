@@ -7,6 +7,17 @@ platforms.
 
 ## [Unreleased]
 
+## [1.5.0] — 2026-07-14
+### Added
+- **Project groups in the sidebar.** The flat project list is now organized into
+  named, collapsible sections (collapse state remembered per machine).
+- **Auto-organize.** Groups are inferred for you from general repo signals —
+  shared name prefixes (shelf / shelf-site / shelf-workbench → *shelf*), shared
+  GitHub owner, or a common sub-folder — so you don't hand-sort. Nothing is
+  hardcoded; it works for any set of repos.
+- A **Group** field in the project editor to override the auto grouping; manual
+  groups always win, and unassigned repos fall under *Ungrouped*.
+
 ## [1.4.1] — 2026-07-14
 ### Fixed
 - The app no longer swallows dashboard-regeneration errors silently. If a
