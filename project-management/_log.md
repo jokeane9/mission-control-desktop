@@ -148,3 +148,59 @@ branch `pm-admin-and-docs` → PR #28 → v1.4.0.
 **Decision captured (not built):** cross-device sync / accounts collide with
 the local-first, no-server, no-accounts principle. Parked as a conscious pivot
 question in PRODUCT.md, not a feature.
+
+---
+
+## 2026-07-14 (session 3) — Views epic → v1.3.0–v1.6.0, QA, cask, full UX pass
+
+**Big day. Six releases (v1.3.0 → v1.6.0) plus a Gatekeeper cask fix and a
+5-agent UX audit.**
+
+**What shipped**
+- **v1.3.0** — three top-level views: Skills (searchable skill catalog),
+  Work Log (commits/day + Claude-tokens/day charts + day-grouped list +
+  "Copy as standup" + overview Today line), Roadmap (each repo's Now/Next).
+  New stdlib sibling `views.py`. (#24 #25 #26 #27)
+- **v1.4.0** — PM scratchpad tab (autosaves via the bridge) + `PRODUCT.md`
+  (first canonical product doc). (#28)
+- **v1.4.1** — `app.py` logs regeneration errors instead of swallowing them
+  (`_log_exc` → DATA/error.log). Motivated by the QA scare below. (#30)
+- **v1.5.0** — auto-organized, collapsible **project groups** in the sidebar;
+  `resolve.auto_groups()` (name-prefix → owner → non-dominant parent-dir);
+  manual `Group` editor field overrides; provenance-marked. (#32)
+- **v1.6.0** — groups become **folders** (click = filter the grid, chevron =
+  collapse, breadcrumb back); **drag-and-drop** reorder groups + move projects
+  (localStorage); attention **rollup dots**; attention-first + tier **triage
+  sort**; blank thesis → last commit; "Ungrouped" → "Other"; **keyboard a11y**
+  (focus ring, Enter/Space on div-nav, `--faint` → WCAG-AA `#868f9c`,
+  reduced-motion). Built from the UX audit. (#33)
+- **Cask caveats** — the Homebrew cask now prints the macOS "Open Anyway" steps
+  at `brew install` (repo copy #31 + live in the tap). Real fix is still
+  notarization (#9).
+
+**The QA scare (important lesson).** A "critical bug — packaged app shows no
+new views" turned out to be a **false alarm**: a stale v1.2.2 instance (process
+named `org.python.python`) never got killed, the window was on a second
+monitor, and a bundle-id mismatch (`com.keane.mission-control` vs `…app`) hid the
+fresh instance from screenshots — compounded by a contaminated shared data dir.
+The shipped app was fine all along (verified by running the real binary; then
+re-verified v1.5.0/v1.6.0 in the packaged app). Takeaways: kill by
+`org.python.python`, the window can be on `LG 32 FHD (1)`, grant
+`com.keane.mission-control`, and the silent `except: pass` (now fixed in v1.4.1)
+is what made a 5-second diagnosis take an hour. Also: unsigned app + macOS 26
+quarantine caused "vanishing" during rapid `brew reinstall` — de-quarantine with
+`xattr -cr`; the signature is valid ad-hoc (recoverable "Open Anyway", not
+"damaged").
+
+**UX audit** — see `UX-AUDIT.md` (findings + recommendations) and `UX-FLOWS.md`
+(the interaction model). 5 design agents: grouping spec + home/IA + views +
+detail/editor/GitHub + global/a11y. v1.6.0 shipped the seam fixes; the ranked
+backlog (PM autosave race, standup-copies-wrong-day, attention hero line, editor
+onboarding, provenance-made-usable, GitHub error consistency, design-system
+tightening) is the v1.6.1+ queue.
+
+**Also:** in `jokeane9/killdate.dev`, refreshed + relaunched the Mission Control
+blog post and merged the duplicate-post-number renumber; both deployed.
+
+**Owner-gated backlog unchanged:** SignPath enrollment (#7 → winget #8), Apple
+notarization (#9), Tahoe icon (#10), posting the launch.
