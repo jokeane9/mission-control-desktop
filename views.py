@@ -279,6 +279,21 @@ def today_line(commits):
             f'<b>{repos} repo{"s" if repos != 1 else ""}</b>')
 
 
+def hero_line(commits, totals):
+    """The overview hero — attention-first. Answers "what needs me?" (repos with
+    unsaved work) with today's commit count as the calm, secondary figure."""
+    midnight = datetime.datetime.now().replace(hour=0, minute=0, second=0,
+                                               microsecond=0).timestamp()
+    today = sum(1 for c in commits if c["t"] >= midnight)
+    tc = f'{today} commit{"" if today == 1 else "s"} today'
+    attn = totals.get("attn", 0)
+    if attn:
+        return (f'<span class="warn">⚠ {attn} project{"" if attn == 1 else "s"} '
+                f'need attention</span> · {totals.get("dirty", 0)} uncommitted, '
+                f'{totals.get("ahead", 0)} unpushed · <span class="sub">{tc}</span>')
+    return f'<span class="ok">✓ All clear</span> · {tc}'
+
+
 def worklog_html(commits, tokens=None):
     """The Work Log view body. Data is embedded once; the range filter, charts,
     and day-grouped list all re-render client-side (no regen round-trip).
@@ -427,11 +442,14 @@ function wlList(cs){
   });
 }
 function copyStandup(btn){
-  var end=new Date();end.setHours(0,0,0,0);          // today 00:00
-  var start=new Date(end);start.setDate(end.getDate()-1);
-  var cs=WORKLOG.filter(function(c){var ms=c.t*1000;
-    return ms>=start.getTime()&&ms<end.getTime();});
-  var lines=['Standup — '+wlFmtDay(start)+':'];
+  // the most recent day BEFORE today that has commits — so Monday copies
+  // Friday, not an empty "yesterday". Groups by repo, oldest-first per repo.
+  var todayKey=wlDayKey(new Date()), byDay={};
+  WORKLOG.forEach(function(c){var k=wlDayKey(new Date(c.t*1000));
+    if(k<todayKey){(byDay[k]=byDay[k]||[]).push(c);}});
+  var keys=Object.keys(byDay).sort(), day=keys.length?keys[keys.length-1]:null;
+  var cs=day?byDay[day]:[];
+  var lines=['Standup — '+(day?wlFmtDay(new Date(day+'T00:00:00')):'no recent commits')+':'];
   if(!cs.length)lines.push('- no commits');
   var byRepo={},order=[];
   cs.forEach(function(c){if(!byRepo[c.r]){byRepo[c.r]=[];order.push(c.r);}byRepo[c.r].push(c.s);});

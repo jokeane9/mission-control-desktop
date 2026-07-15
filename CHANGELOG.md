@@ -7,6 +7,18 @@ platforms.
 
 ## [Unreleased]
 
+## [1.6.1] — 2026-07-14
+### Fixed
+- **The PM scratchpad can no longer lose edits to the background refresh.** The
+  periodic reload now waits while the pad has unsaved changes or focus.
+- **"Copy as standup" now copies the most recent day you actually committed**
+  (so Monday grabs Friday), instead of always copying "yesterday" and coming up
+  empty after a weekend.
+### Changed
+- The overview's top line leads with **attention** — "⚠ N projects need
+  attention · X uncommitted, Y unpushed" (or "✓ All clear") — instead of just a
+  commit count, so the first thing you read is what needs you.
+
 ## [1.6.0] — 2026-07-14
 ### Added
 - **Groups are folders now.** Click a group in the sidebar to filter the main
