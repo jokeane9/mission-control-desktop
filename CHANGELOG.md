@@ -7,6 +7,21 @@ platforms.
 
 ## [Unreleased]
 
+## [2.3.0] — 2026-07-17
+### Added
+- **Session footprints.** Each session row now shows *what it did*, not just a
+  hex id: the files it edited, the dirs it worked in, the branches it touched,
+  and the PRs it opened (clickable). `04dc2441` becomes "edited views.py,
+  cli.py, generate.py · mission-control-desktop/ tests/ · PR #36 #37 #43" — so
+  eight sessions under one repo stop being eight blanks.
+  - All of it is action-metadata (file paths, branch names, PR URLs, tool
+    names). **Still never prompt or response content** — the privacy test now
+    also plants a secret in a Bash command and asserts it can't leak.
+  - Free: it comes out of the transcript pass the Work Log already does. Cache
+    v3 → v4; a read-only session (no edits) falls back to showing where it ran.
+  - `orrery sessions` shows the footprint too, and `--json` carries the fields.
+
+
 ## [2.2.1] — 2026-07-17
 ### Fixed
 - **"Needs attention" no longer cries wolf** ([#44](https://github.com/jokeane9/orrery/issues/44)).

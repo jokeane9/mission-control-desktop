@@ -752,6 +752,12 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--mono);font
 .wtchip{font-size:9.5px;color:var(--muted);background:var(--panel2);
   border:1px solid var(--border2);border-radius:9px;padding:1px 7px}
 .wtchip.amber{color:var(--amber);border-color:var(--amber)}
+a.wtchip.pr{color:var(--blue);border-color:var(--border2);text-decoration:none}
+a.wtchip.pr:hover{border-color:var(--blue)}
+/* session footprint — the identity line: files edited, then dirs worked in */
+.sffiles{color:var(--muted)}
+.sfdirs{color:var(--faint)}
+.sfnone{color:var(--faint);font-style:italic}
 .wthint{font-size:10px;color:var(--faint);padding:8px 0 2px;border-top:1px solid var(--border);
   margin-top:6px}
 .wthint code{color:var(--muted);font-size:10px}

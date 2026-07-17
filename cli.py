@@ -248,11 +248,24 @@ def cmd_sessions(args):
                 print(bold(cur))
             mark = green("●") if s["active"] else dim("○")
             when = green("live") if s["active"] else views._ago(s["age_min"])
+            br = (f'{len(s["branches"])} branches' if len(s["branches"]) > 1
+                  else (s["branch"] or "—"))
             bits = [f'{s["msgs"]} msgs', f'{views._knum(s["tokens"])} tok']
+            if s["prs"]:
+                bits.append(blue(" ".join("#" + p["num"] for p in s["prs"][:4])))
             if s["worktree_live"]:
                 bits.append(amber("left a worktree"))
-            print(f'  {mark} {s["id"]}  {dim((s["branch"] or "—")[:18].ljust(18))} '
+            print(f'  {mark} {s["id"]}  {dim(br[:18].ljust(18))} '
                   f'{when.rjust(8)}  {dim(" · ".join(bits))}')
+            # The footprint — what the session did, so the id isn't a blank.
+            fp = []
+            if s["files"]:
+                fp.append(", ".join(s["files"][:3])
+                          + (f' +{len(s["files"]) - 3}' if len(s["files"]) > 3 else ""))
+            if s["dirs"]:
+                fp.append(dim(" ".join(d + "/" for d in s["dirs"][:4])))
+            if fp:
+                print("       " + " · ".join(fp))
         if ghosts:
             print(dim("\nSessions that left a worktree ended without cleaning up — "
                       "see `orrery worktrees`."))

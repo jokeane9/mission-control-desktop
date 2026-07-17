@@ -14,8 +14,10 @@ Views:
   Worktrees — every extra checkout across the repos, oldest first, each with a
              safe-to-remove verdict. Surfaces the ghost worktrees an interrupted
              Claude Code session leaves under .claude/worktrees/.
-  Sessions — Claude Code sessions per repo: live/idle, branch, span, tokens, and
-             whether one left a worktree behind. Metadata only, never content.
+  Sessions — Claude Code sessions per repo: live/idle, plus a FOOTPRINT (files
+             edited, dirs, branches, PRs opened) that gives each a readable
+             identity, and whether one left a worktree behind. Metadata only,
+             never prompt or response content.
   PM       — a local, always-there admin scratchpad: one free-text notes file
              the desktop app autosaves. Not synced; lives in the data dir.
 """
@@ -205,20 +207,34 @@ def _worktree_of(cwd):
     return cwd[:i + len(_WT_MARK)] + tail if tail else ""
 
 
+_FP_FILES = 12          # top files kept in a session's footprint
+_FP_DIRS = 6            # top dirs
+_EDIT_TOOLS = ("Edit", "Write", "NotebookEdit", "MultiEdit")
+
+
 def _parse_transcript(path):
     """One pass over a session transcript → {"days": …, "meta": …}.
 
     days: per-day usage totals. Deduped by message id — streaming updates repeat
     a message's usage on several lines; keep the last.
-    meta: what the Sessions view needs — launch cwd, branch, span, message count.
+    meta: what the Sessions view needs to give a session an IDENTITY —
+      cwd/branch/span/msgs, plus the FOOTPRINT (branches touched, files & dirs
+      edited, PRs opened, tool-use profile). `04dc2441` means nothing; "worked
+      marketing/ · edited index.html · PR #208" means everything.
 
-    Both come from ONE walk on purpose: the transcripts run to hundreds of MB,
-    so a second pass to collect session metadata would double the cost of every
-    cold render. The `"usage"` pre-filter still skips most lines cheaply; the
-    metadata lines we care about are few and checked only when the filter misses.
+    All of the footprint is action-metadata — file paths, branch names, PR URLs,
+    tool names. Never prompt or response text; the privacy wall stands.
+
+    One walk on purpose: the transcripts run to hundreds of MB, so a second pass
+    would double every cold render. The `tool_use`/`pr-link` lines all carry a
+    `timestamp`, so they already pass the fast-path filter — the footprint is
+    free of the pass that was already happening.
     """
+    import collections
     ids = {}
-    meta = {"cwd": "", "branch": "", "start": "", "end": "", "msgs": 0, "wts": []}
+    meta = {"cwd": "", "branch": "", "start": "", "end": "", "msgs": 0, "wts": [],
+            "branches": [], "prs": []}
+    files, dirs, tools = collections.Counter(), collections.Counter(), collections.Counter()
     try:
         for line in open(path, encoding="utf-8", errors="ignore"):
             has_usage = '"usage"' in line
@@ -249,17 +265,45 @@ def _parse_transcript(path):
                 wt = _worktree_of(cwd)
                 if wt and wt not in meta["wts"]:
                     meta["wts"].append(wt)
-            if not meta["branch"] and d.get("gitBranch"):
-                meta["branch"] = d["gitBranch"]
-            if d.get("type") in ("user", "assistant"):
+            gb = d.get("gitBranch")
+            if gb:
+                meta["branch"] = meta["branch"] or gb   # first, for attribution
+                if gb not in meta["branches"]:
+                    meta["branches"].append(gb)         # all, for the footprint
+            typ = d.get("type")
+            if typ in ("user", "assistant"):
                 meta["msgs"] += 1
+            m = d.get("message") or {}
+            content = m.get("content")
+            if isinstance(content, list):               # assistant tool calls
+                for b in content:
+                    if not (isinstance(b, dict) and b.get("type") == "tool_use"):
+                        continue
+                    name = b.get("name") or "?"
+                    tools[name] += 1
+                    if name in _EDIT_TOOLS:
+                        fp = (b.get("input") or {}).get("file_path")
+                        if fp:
+                            files[os.path.basename(fp)] += 1
+                            parent = os.path.basename(os.path.dirname(fp))
+                            if parent:
+                                dirs[parent] += 1
+            elif typ == "pr-link":                      # a PR this session opened
+                num, url = d.get("prNumber"), d.get("prUrl")
+                if num and not any(p.get("num") == str(num) for p in meta["prs"]):
+                    meta["prs"].append({"num": str(num), "url": url or "",
+                                        "repo": d.get("prRepository") or ""})
             if has_usage:
-                m = d.get("message") or {}
                 u = m.get("usage")
                 if isinstance(u, dict) and ts:
                     ids[m.get("id") or d.get("requestId") or ts] = (ts, u)
     except OSError:
         return {"days": {}, "meta": meta}
+    # Trim the footprint before it hits the cache — a big session can edit
+    # hundreds of files; the row needs the headline few, not the archive.
+    meta["files"] = [f for f, _ in files.most_common(_FP_FILES)]
+    meta["dirs"] = [d for d, _ in dirs.most_common(_FP_DIRS)]
+    meta["tools"] = dict(tools)
     days = {}
     for ts, u in ids.values():
         try:
@@ -277,7 +321,7 @@ def _parse_transcript(path):
     return {"days": days, "meta": meta}
 
 
-_CACHE_V = 3        # v2 added per-session `meta`; v3 added meta["wts"]
+_CACHE_V = 4        # v2 meta; v3 meta["wts"]; v4 footprint (branches/files/dirs/prs/tools)
 
 
 def _transcripts(cache_path, claude_dir=CLAUDE_DIR):
@@ -922,11 +966,19 @@ def collect_sessions(project_dirs, cache_path, claude_dir=CLAUDE_DIR,
             for i in range(4):
                 tokens[i] += v[i]
         age_min = max(0, int((now - end).total_seconds() / 60))
+        # Footprint — what the session DID, so a row reads as work, not a hex id.
+        # .get with defaults: a cache written before v4 lacks these until reparse.
+        branches = [b for b in (meta.get("branches") or []) if b]
         out.append({
             "id": os.path.basename(path)[:8],
             "repo": repo,
             "cwd": cwd,
             "branch": meta.get("branch") or "",
+            "branches": branches,
+            "files": meta.get("files") or [],
+            "dirs": meta.get("dirs") or [],
+            "prs": meta.get("prs") or [],
+            "tools": meta.get("tools") or {},
             "started": start.isoformat(timespec="minutes") if start else "",
             "ended": end.isoformat(timespec="minutes"),
             "age_min": age_min,
@@ -989,8 +1041,35 @@ def sessions_html(sessions):
         for s in rows:
             dot = ('<span class="dot green"></span>' if s["active"]
                    else '<span class="dot dim"></span>')
-            branch = (f'<span class="wtbranch">{esc(s["branch"])}</span>'
-                      if s["branch"] else "")
+            # Footprint fields via .get(): a hand-built row or a pre-v4 cache
+            # entry may not carry them, and the renderer shouldn't crash on that.
+            branches = s.get("branches") or []
+            files, sdirs, prs = (s.get("files") or [], s.get("dirs") or [],
+                                 s.get("prs") or [])
+            # Branch: one shows inline; several collapse to a hover-listing count,
+            # since a heavy session can span ten branches.
+            if len(branches) > 1:
+                branch = (f'<span class="wtbranch" title="'
+                          + esc("  ".join(branches), quote=True) + '">'
+                          + f'{len(branches)} branches</span>')
+            elif s["branch"]:
+                branch = f'<span class="wtbranch">{esc(s["branch"])}</span>'
+            else:
+                branch = ""
+
+            # The footprint line — what the session DID, so the row has identity.
+            fp = []
+            if files:
+                shown = ", ".join(esc(f) for f in files[:3])
+                extra = len(files) - 3
+                fp.append(f'<span class="sffiles">{shown}'
+                          + (f' +{extra}' if extra > 0 else "") + '</span>')
+            if sdirs:
+                fp.append('<span class="sfdirs">'
+                          + " ".join(esc(d) + "/" for d in sdirs[:4]) + '</span>')
+            # No edits → a read/plan session; show where it ran instead of blank.
+            footline = " · ".join(fp) if fp else f'<span class="sfnone">{esc(s["cwd"])}</span>'
+
             chips = []
             if s["msgs"]:
                 chips.append(f'<span class="wtchip">{s["msgs"]} msgs</span>')
@@ -998,6 +1077,11 @@ def sessions_html(sessions):
                 chips.append(f'<span class="wtchip">{_knum(s["tokens"])} tokens</span>')
             if s["mins"]:
                 chips.append(f'<span class="wtchip">{_ago(s["mins"]).replace(" ago", "")}</span>')
+            for p in prs[:5]:                    # click straight through to the PR
+                url = esc(p.get("url") or "", quote=True)
+                label = "PR #" + esc(p.get("num", "?"))
+                chips.append(f'<a class="wtchip pr" href="{url}" target="_blank">{label}</a>'
+                             if url else f'<span class="wtchip">{label}</span>')
             # The join that makes this view worth building.
             if s["worktree_live"]:
                 chips.append('<span class="wtchip amber" title="' +
@@ -1007,7 +1091,7 @@ def sessions_html(sessions):
                      else f'<span class="wtage">{esc(_ago(s["age_min"]))}</span>')
             body.append(f'''<div class="wtrow">
   <div class="wtmain">{dot}<span class="wtname">{esc(s["id"])}</span>{branch}{state}</div>
-  <div class="wtpath" title="{esc(s["cwd"], quote=True)}">{esc(s["cwd"])}</div>
+  <div class="wtpath" title="{esc(s["cwd"], quote=True)}">{footline}</div>
   <div class="wtchips">{"".join(chips)}</div>
 </div>''')
         out.append(f'''<div class="sgroup">

@@ -48,6 +48,42 @@ def mktranscript(claude, slug, sid, cwd, *, branch="main", hours_ago=0,
     return p
 
 
+def mkfootprint(claude, slug, sid, cwd, *, edits=(), branches=("main",),
+                prs=(), bash=0, hours_ago=1, secret="SECRET_PROMPT"):
+    """A transcript with real footprint signal: tool_use edits, extra branches,
+    pr-link records, Bash calls. `secret` seeds prompt content that must not leak
+    into the footprint."""
+    d = os.path.join(claude, "projects", slug)
+    os.makedirs(d, exist_ok=True)
+    lines = [{"type": "user", "cwd": cwd, "gitBranch": branches[0],
+              "timestamp": ts(hours_ago + 1), "message": {"content": secret}}]
+    for br in branches[1:]:                       # branch drift across the session
+        lines.append({"type": "user", "cwd": cwd, "gitBranch": br,
+                      "timestamp": ts(hours_ago), "message": {"content": secret}})
+    tool_blocks = []
+    for fp in edits:
+        tool_blocks.append({"type": "tool_use", "name": "Edit",
+                            "input": {"file_path": fp}})
+    for _ in range(bash):
+        tool_blocks.append({"type": "tool_use", "name": "Bash",
+                            "input": {"command": secret}})   # command must not leak
+    if tool_blocks:
+        lines.append({"type": "assistant", "cwd": cwd, "timestamp": ts(hours_ago),
+                      "message": {"content": tool_blocks, "id": "a1",
+                                  "usage": {"input_tokens": 5, "output_tokens": 5,
+                                            "cache_creation_input_tokens": 0,
+                                            "cache_read_input_tokens": 0}}})
+    for num in prs:
+        lines.append({"type": "pr-link", "sessionId": sid, "timestamp": ts(hours_ago),
+                      "prNumber": str(num), "prUrl": f"https://github.com/o/r/pull/{num}",
+                      "prRepository": "o/r"})
+    p = os.path.join(d, f"{sid}.jsonl")
+    with open(p, "w") as f:
+        for l in lines:
+            f.write(json.dumps(l) + "\n")
+    return p
+
+
 def workspace():
     base = tempfile.mkdtemp()
     claude = os.path.join(base, "claude")
@@ -55,6 +91,83 @@ def workspace():
     os.makedirs(repo)
     cache = os.path.join(base, "tok.json")
     return base, claude, repo, cache
+
+
+# --- footprint (#49): a session's identity from what it did ----------------- #
+def test_footprint_files_dirs_branches_prs_tools():
+    base, claude, repo, cache = workspace()
+    try:
+        mkfootprint(claude, "-app", "fp000001", repo,
+                    edits=[os.path.join(repo, "src", "auth.py"),
+                           os.path.join(repo, "src", "auth.py"),   # edited twice
+                           os.path.join(repo, "docs", "README.md")],
+                    branches=["main", "feat/auth", "fix/typo"],
+                    prs=[41, 42], bash=7)
+        s = V.collect_sessions([("app", repo)], cache, claude_dir=claude)[0]
+        assert s["files"][0] == "auth.py"            # most-edited first
+        assert set(s["files"]) == {"auth.py", "README.md"}
+        assert set(s["dirs"]) == {"src", "docs"}
+        assert s["branches"] == ["main", "feat/auth", "fix/typo"]
+        assert [p["num"] for p in s["prs"]] == ["41", "42"]
+        assert s["prs"][0]["url"].endswith("/pull/41")
+        assert s["tools"].get("Edit") == 3 and s["tools"].get("Bash") == 7
+    finally:
+        shutil.rmtree(base, ignore_errors=True)
+
+
+def test_footprint_never_leaks_prompt_or_command_content():
+    """The privacy wall extends to the footprint: it records file PATHS and tool
+    NAMES, never the Bash command text or the prompt that drove them."""
+    base, claude, repo, cache = workspace()
+    try:
+        mkfootprint(claude, "-app", "fp000002", repo,
+                    edits=[os.path.join(repo, "x.py")], bash=3,
+                    prs=[9], secret="LEAKED_bash_and_prompt_body")
+        s = V.collect_sessions([("app", repo)], cache, claude_dir=claude)
+        assert "LEAKED_bash_and_prompt_body" not in json.dumps(s)
+        assert "LEAKED_bash_and_prompt_body" not in V.sessions_html(s)
+    finally:
+        shutil.rmtree(base, ignore_errors=True)
+
+
+def test_footprint_trimmed_to_top_n():
+    """A session that edits hundreds of files keeps only the headline few."""
+    base, claude, repo, cache = workspace()
+    try:
+        edits = [os.path.join(repo, f"f{i}.py") for i in range(40)]
+        mkfootprint(claude, "-app", "fp000003", repo, edits=edits)
+        s = V.collect_sessions([("app", repo)], cache, claude_dir=claude)[0]
+        assert len(s["files"]) == V._FP_FILES
+    finally:
+        shutil.rmtree(base, ignore_errors=True)
+
+
+def test_footprint_renders_and_pr_links_are_clickable():
+    base, claude, repo, cache = workspace()
+    try:
+        mkfootprint(claude, "-app", "fp000004", repo,
+                    edits=[os.path.join(repo, "cli.py")],
+                    branches=["main", "b2"], prs=[7])
+        s = V.collect_sessions([("app", repo)], cache, claude_dir=claude)
+        h = V.sessions_html(s)
+        assert "cli.py" in h                          # footprint on the page
+        assert "2 branches" in h                      # multi-branch collapses
+        assert 'href="https://github.com/o/r/pull/7"' in h and "PR #7" in h
+        assert 'target="_blank"' in h                 # opens externally
+    finally:
+        shutil.rmtree(base, ignore_errors=True)
+
+
+def test_read_only_session_has_empty_footprint():
+    """A session that edited nothing (a read/plan run) shouldn't invent one —
+    the row falls back to showing where it ran."""
+    base, claude, repo, cache = workspace()
+    try:
+        mktranscript(claude, "-app", "ro000001", repo)   # no tool_use
+        s = V.collect_sessions([("app", repo)], cache, claude_dir=claude)[0]
+        assert s["files"] == [] and s["dirs"] == [] and s["prs"] == []
+    finally:
+        shutil.rmtree(base, ignore_errors=True)
 
 
 # --- privacy ---------------------------------------------------------------- #
