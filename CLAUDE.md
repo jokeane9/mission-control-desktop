@@ -33,8 +33,9 @@ project. Never version the two platforms independently.
 
 | File | Role | Notes |
 |---|---|---|
-| `generate.py` | Scans git + renders `index.html` from `baseline.json`. **stdlib only.** | The engine. `app.py` and `menubar.py` both import it. Also runnable standalone: `./generate.py --open`. |
+| `generate.py` | Scans git + renders `index.html` from `baseline.json`. **stdlib only.** | The engine. `app.py`, `menubar.py` and `cli.py` all import it. Also runnable standalone: `./generate.py --open`. `workspace()` is the shared "what needs you" — GUI and CLI both call it, so they can't disagree. |
 | `app.py` | The windowed desktop app (pywebview). This is the packaged entry point. | Regenerates on launch + on a background timer; `Refresh git` button bridges JS→Python. |
+| `cli.py` | The terminal surface: `orrery status / worktrees / standup / skills`, `--json`. **stdlib only.** | A *formatter*, deliberately — every command is a thin renderer over a `collect_*()` that already backs the GUI. Logic added here is logic the GUI can't see: put it in `views.py`/`generate.py` instead. Reads the installed app's config, not the source tree's (see `cli.resolve_data_dir`). |
 | `menubar.py` | macOS menu-bar companion (rumps). Optional, dev-only. | Not packaged. |
 | `gen_icon.py` | Renders `icon_1024.png` (AppKit). macOS-only, run manually. | Source of both `icon.icns` (mac) and `packaging/icon.ico` (win). |
 | `packaging/` | Everything platform-specific: PyInstaller spec, entitlements, build scripts, Inno Setup installer, Homebrew cask. | The only place the two platforms diverge. |

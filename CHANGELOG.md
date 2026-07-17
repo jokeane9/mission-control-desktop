@@ -7,6 +7,27 @@ platforms.
 
 ## [Unreleased]
 
+## [2.1.0] — 2026-07-16
+### Added
+- **A CLI.** The dashboard as a command — `orrery status`, `worktrees`,
+  `standup`, `skills` — because a window you have to *open* loses to a command
+  you can pipe, and a CLI needs no bundle, no Gatekeeper and no notarization to
+  run.
+  - `--json` on every command, so it composes with whatever you already use:
+    `orrery status --json | jq '.projects[] | select(.attention) | .name'`
+  - `orrery status --strict` exits non-zero when something needs you, so
+    `orrery status --strict && ./deploy.sh` won't deploy over unsaved work.
+  - It reads the **installed app's config**, so the CLI and the window always
+    describe the same workspace (`--data` / `$ORRERY_DATA` to override).
+  - Colour only when attached to a terminal, and `NO_COLOR` is honoured — piped
+    output is clean text.
+
+### Changed
+- `generate.workspace()` is now the single source of truth for "what needs you".
+  The attention rollup used to live inline in the HTML render; the GUI and CLI
+  now both call it, so the two surfaces cannot disagree about which repos need
+  you or what the totals are.
+
 ## [2.0.0] — 2026-07-16
 ### Changed
 - **Mission Control is now Orrery.** The old name collided with Apple's own
