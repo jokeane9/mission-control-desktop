@@ -550,10 +550,13 @@ def main():
     worktrees = views.collect_worktrees(project_dirs)
     top_view("worktrees", "worktrees", views.worktrees_html(worktrees))
     # Same token_cache.json the Work Log uses: one parse of the transcripts feeds
-    # both views, so the second one is nearly free.
+    # both views. default_sources adds Cursor when its DB is present.
+    _scache = os.path.join(DATA, "token_cache.json")
+    _ssources = views.default_sources(_scache)
     top_view("sessions", "sessions",
-             views.sessions_html(views.collect_sessions(
-                 project_dirs, os.path.join(DATA, "token_cache.json"))))
+             views.sessions_html(
+                 views.collect_sessions(project_dirs, _scache, sources=_ssources),
+                 sources_present=[s.name for s in _ssources]))
     top_view("pm", "pm", views.notes_html(views.load_notes(NOTES)))
 
     now_dt = datetime.datetime.now()
@@ -568,6 +571,7 @@ def main():
 <style>
 :root{--bg:#0d1117;--panel:#161b22;--panel2:#1c2129;--border:#21262d;--border2:#30363d;
   --ink:#c9d1d9;--muted:#8b949e;--faint:#868f9c;--faintline:#6e7681;--blue:#58a6ff;--green:#3fb950;--amber:#d29922;
+  --cursor:#bc8cff;
   --mono:'SF Mono','Fira Code','Cascadia Code',Consolas,ui-monospace,Menlo,monospace}
 *{box-sizing:border-box}
 /* keyboard focus is visible everywhere; mouse users never see it */
@@ -752,6 +756,13 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--mono);font
 .wtchip{font-size:9.5px;color:var(--muted);background:var(--panel2);
   border:1px solid var(--border2);border-radius:9px;padding:1px 7px}
 .wtchip.amber{color:var(--amber);border-color:var(--amber)}
+/* session source tag — tool identity (Claude blue, Cursor purple) */
+.ssrc{font-size:9px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+  padding:1px 6px;border-radius:4px;border:1px solid;flex:none}
+.ssrc.claude{color:var(--blue);border-color:var(--blue)}
+.ssrc.cursor{color:var(--cursor);border-color:var(--cursor)}
+.sessfilter{display:flex;gap:6px;margin:0 0 14px}
+.sessfilter .fbtn.cursor.on{border-color:var(--cursor);color:var(--cursor)}
 a.wtchip.pr{color:var(--blue);border-color:var(--border2);text-decoration:none}
 a.wtchip.pr:hover{border-color:var(--blue)}
 /* session footprint — the identity line: files edited, then dirs worked in */
@@ -1013,6 +1024,21 @@ function skillFilter(q){
     var vis=0;
     g.querySelectorAll('.skrow').forEach(function(r){
       var on=!q||r.getAttribute('data-q').indexOf(q)>=0;
+      r.style.display=on?'':'none';if(on)vis++;
+    });
+    g.style.display=vis?'':'none';
+  });
+}
+// Sessions source filter: show rows whose data-src matches (or 'all'), then hide
+// any repo group left with no visible rows. Keeps the interleaved-by-repo layout.
+function sessFilter(btn,src){
+  var v=document.getElementById('v-sessions');
+  v.querySelectorAll('.sessfilter .fbtn').forEach(function(b){b.classList.remove('on');});
+  btn.classList.add('on');
+  v.querySelectorAll('[data-sessgroup]').forEach(function(g){
+    var vis=0;
+    g.querySelectorAll('.wtrow').forEach(function(r){
+      var on=src==='all'||r.getAttribute('data-src')===src;
       r.style.display=on?'':'none';if(on)vis++;
     });
     g.style.display=vis?'':'none';

@@ -14,10 +14,12 @@ Views:
   Worktrees — every extra checkout across the repos, oldest first, each with a
              safe-to-remove verdict. Surfaces the ghost worktrees an interrupted
              Claude Code session leaves under .claude/worktrees/.
-  Sessions — Claude Code sessions per repo: live/idle, plus a FOOTPRINT (files
-             edited, dirs, branches, PRs opened) that gives each a readable
-             identity, and whether one left a worktree behind. Metadata only,
-             never prompt or response content.
+  Sessions — agent sessions per repo (Claude Code + Cursor), tagged by tool:
+             live/idle, a FOOTPRINT (files edited, dirs, branches, PRs) that
+             gives each a readable identity, and whether one left a worktree
+             behind. Read from each tool's local files; metadata only, never
+             prompt or response content. Tool identity lives ONLY here — git
+             has none, so Worktrees and Work Log stay tool-agnostic.
   PM       — a local, always-there admin scratchpad: one free-text notes file
              the desktop app autosaves. Not synced; lives in the data dir.
 """
@@ -929,69 +931,284 @@ def _match_repo(cwd, project_dirs):
     return best_name
 
 
+# --------------------------------------------------------------------------- #
+# Session SOURCES. A source reads one tool's local exhaust and yields records in
+# the shape below, already repo-attributed and source-tagged. `collect_sessions`
+# is then just concat + sort — so a second tool (Cursor) is a new source, not a
+# rewrite, and one flaky source can never blank the view.
+#
+# Tool identity lives ONLY here: git has no tool field, so Worktrees and Work Log
+# stay tool-agnostic. This is the only place a "who was driving" split is honest.
+# --------------------------------------------------------------------------- #
+def _session_record(sid, repo, source, *, cwd="", branch="", branches=(),
+                    files=(), dirs=(), prs=(), tools=None, start=None, end=None,
+                    now=None, worktrees=()):
+    """One session in the canonical shape. Every source builds records through
+    here, so the schema has a single definition and honest empties are uniform —
+    a field a tool doesn't record (Cursor has no tokens/PRs) stays 0/[]."""
+    live_wts = [w for w in worktrees if w and os.path.isdir(w)]
+    wt = (live_wts or list(worktrees) or [""])[0]
+    age_min = max(0, int((now - end).total_seconds() / 60)) if end else 10 ** 9
+    return {
+        "id": (sid or "")[:8],
+        "source": source,                   # "claude" | "cursor"
+        "repo": repo,
+        "cwd": cwd,
+        "branch": branch or "",
+        "branches": [b for b in branches if b],
+        "files": list(files),
+        "dirs": list(dirs),
+        "prs": list(prs),
+        "tools": dict(tools or {}),
+        "started": start.isoformat(timespec="minutes") if start else "",
+        "ended": end.isoformat(timespec="minutes") if end else "",
+        "age_min": age_min,
+        "mins": (int((end - start).total_seconds() / 60)
+                 if start and end and end >= start else 0),
+        "msgs": 0,          # filled by the caller (varies per source)
+        "tokens": 0,
+        "worktree": wt,
+        "worktree_live": bool(live_wts),
+        "active": age_min <= SESSION_ACTIVE_MIN,
+    }
+
+
+class ClaudeSource:
+    """Claude Code sessions, from ~/.claude transcripts. The reference source —
+    this is the original collect_sessions loop, unchanged but for the record now
+    going through _session_record and carrying source="claude"."""
+    name = "claude"
+
+    def __init__(self, cache_path, claude_dir=CLAUDE_DIR):
+        self.cache_path, self.claude_dir = cache_path, claude_dir
+
+    def sessions(self, project_dirs, now, cutoff):
+        out = []
+        for path, e in _transcripts(self.cache_path, self.claude_dir).items():
+            meta = e.get("meta") or {}
+            cwd = meta.get("cwd") or ""
+            if not cwd:
+                continue
+            cwd = os.path.realpath(cwd)
+            repo = _match_repo(cwd, project_dirs)
+            if not repo:                    # not a dashboard repo — out of scope
+                continue
+            end = _iso_local(meta.get("end"))
+            start = _iso_local(meta.get("start"))
+            if not end or end < cutoff:
+                continue
+            # Every worktree this session touched, not just the one it opened in.
+            wts = [os.path.realpath(w) for w in (meta.get("wts") or [])]
+            tokens = [0, 0, 0, 0]
+            for v in (e.get("days") or {}).values():
+                for i in range(4):
+                    tokens[i] += v[i]
+            rec = _session_record(
+                os.path.basename(path), repo, self.name, cwd=cwd,
+                branch=meta.get("branch") or "", branches=meta.get("branches") or [],
+                files=meta.get("files") or [], dirs=meta.get("dirs") or [],
+                prs=meta.get("prs") or [], tools=meta.get("tools") or {},
+                start=start, end=end, now=now, worktrees=wts)
+            rec["msgs"] = meta.get("msgs") or 0
+            rec["tokens"] = sum(tokens)
+            out.append(rec)
+        return out
+
+
+CURSOR_DB = os.path.expanduser(
+    "~/Library/Application Support/Cursor/User/globalStorage/state.vscdb")
+# Cursor versions the tool-name suffix (edit_file_v2 → …); match by prefix so a
+# bump doesn't silently stop counting edits.
+_CURSOR_EDIT = ("edit_file", "write_file", "write", "apply", "search_replace",
+                "create_file", "delete_file")
+
+
+def _ms_local(ms):
+    """Cursor epoch-milliseconds → naive local datetime, matching _iso_local."""
+    try:
+        return datetime.datetime.fromtimestamp(int(ms) / 1000)
+    except (TypeError, ValueError, OSError, OverflowError):
+        return None
+
+
+def _match_repo_dir(path, project_dirs):
+    """Like _match_repo but returns (name, repo_root) — the Cursor reader needs
+    the root path, not just the name, to use as the session's cwd."""
+    best = ("", "", -1)
+    for name, p in project_dirs:
+        root = os.path.realpath(os.path.expanduser(p))
+        if (path == root or path.startswith(root + os.sep)) and len(root) > best[2]:
+            best = (name, root, len(root))
+    return best[0], best[1]
+
+
+def _cursor_tool_path(tf):
+    """The file path a Cursor tool_use touched — `params.relativeWorkspacePath`
+    (absolute, despite the name), falling back to older `rawArgs.path`. Reads
+    ONLY the path key; never `result`/`contents` (that's file content)."""
+    for key in ("params", "rawArgs"):
+        v = tf.get(key)
+        if isinstance(v, str):
+            try:
+                v = json.loads(v)
+            except Exception:
+                continue
+        if isinstance(v, dict):
+            p = v.get("relativeWorkspacePath") or v.get("path") or v.get("targetFile")
+            if p:
+                return p
+    return None
+
+
+class CursorSource:
+    """Cursor sessions, from its local SQLite DB. Reverse-engineered and
+    defensive: every field access tolerates absence, and the whole source is
+    wrapped by collect_sessions so a schema change can't blank the Claude view.
+
+    Reads METADATA ONLY — ids, timestamps, repo/branch names, tool names, and
+    the single file-path string per tool call. Never prompt/response text
+    (`text`, `richText`, `context`, tool `result`/`contents`), which fills this
+    DB. Opened read-only + immutable so it can't lock a running Cursor.
+    """
+    name = "cursor"
+
+    def __init__(self, cache_path=None, db_path=CURSOR_DB):
+        self.db_path = db_path
+
+    def _open(self):
+        import sqlite3
+        con = sqlite3.connect(f"file:{self.db_path}?mode=ro&immutable=1", uri=True)
+        con.text_factory = lambda b: b.decode("utf-8", "ignore")
+        return con
+
+    def _footprint(self, con, cid):
+        """(files, dirs, tools) from a session's bubbles. One prefix-indexed
+        scan; only touches recent sessions since collect_sessions filters by the
+        cutoff before calling this."""
+        import collections
+        files, dirs, tools = (collections.Counter(), collections.Counter(),
+                              collections.Counter())
+        try:
+            rows = con.execute("SELECT value FROM cursorDiskKV WHERE key LIKE ?",
+                               (f"bubbleId:{cid}%",)).fetchall()
+        except Exception:
+            return [], [], {}
+        for (bv,) in rows:
+            try:
+                tf = (json.loads(bv) or {}).get("toolFormerData")
+            except Exception:
+                continue
+            if not isinstance(tf, dict):
+                continue
+            nm = tf.get("name") or ""
+            tools[nm] += 1
+            if nm.startswith(_CURSOR_EDIT):
+                p = _cursor_tool_path(tf)
+                if p:
+                    files[os.path.basename(p)] += 1
+                    parent = os.path.basename(os.path.dirname(p))
+                    if parent:
+                        dirs[parent] += 1
+        return ([f for f, _ in files.most_common(_FP_FILES)],
+                [d for d, _ in dirs.most_common(_FP_DIRS)], dict(tools))
+
+    def _repo(self, d, project_dirs):
+        """(name, root) for a composer — trackedGitRepos, then workspace URI.
+        Returns ("","") when it doesn't belong to a dashboard repo."""
+        for r in (d.get("trackedGitRepos") or []):
+            rp = r.get("repoPath")
+            if rp:
+                name, root = _match_repo_dir(os.path.realpath(rp), project_dirs)
+                if name:
+                    return name, root
+        uri = (d.get("workspaceIdentifier") or {}).get("uri") or {}
+        p = uri.get("path") or uri.get("fsPath")
+        if p:
+            return _match_repo_dir(os.path.realpath(p), project_dirs)
+        return "", ""
+
+    def sessions(self, project_dirs, now, cutoff):
+        if not os.path.isfile(self.db_path):
+            return []                       # Cursor not installed — nothing to read
+        con = self._open()
+        try:
+            comps = con.execute("SELECT key,value FROM cursorDiskKV "
+                                "WHERE key LIKE 'composerData:%'").fetchall()
+        except Exception:
+            con.close()
+            return []
+        out = []
+        for key, val in comps:
+            try:
+                d = json.loads(val)
+            except Exception:
+                continue
+            hdrs = d.get("fullConversationHeadersOnly") or []
+            if not hdrs:                    # empty draft — not a real session
+                continue
+            repo, root = self._repo(d, project_dirs)
+            if not repo:                    # not a dashboard repo — out of scope
+                continue
+            start = _ms_local(d.get("createdAt"))
+            end = _ms_local(d.get("lastUpdatedAt"))
+            branches = []
+            for r in (d.get("trackedGitRepos") or []):
+                for b in (r.get("branches") or []):
+                    bn, t = b.get("branchName"), _ms_local(b.get("lastInteractionAt"))
+                    if bn and bn not in branches:
+                        branches.append(bn)
+                    if t and (not end or t > end):
+                        end = t             # a branch touch can post-date lastUpdated
+            if not end or end < cutoff:     # outside the window — skip before scan
+                continue
+            cid = key.split(":", 1)[1]
+            files, dirs, tools = self._footprint(con, cid)
+            rec = _session_record(
+                cid, repo, self.name, cwd=root,
+                branch=d.get("committedToBranch") or (branches[0] if branches else ""),
+                branches=branches, files=files, dirs=dirs, prs=[], tools=tools,
+                start=start, end=end, now=now)
+            rec["msgs"] = len(hdrs)
+            # tokens stay 0, prs stay [], worktree stays "" — Cursor records none.
+            out.append(rec)
+        con.close()
+        return out
+
+
+def default_sources(cache_path, claude_dir=CLAUDE_DIR, cursor_db=CURSOR_DB):
+    """The session sources present on this machine: Claude always, Cursor only
+    when its DB exists. The app and CLI share this so they agree on what's read.
+    A missing Cursor DB means the source isn't added at all — the view then shows
+    Cursor as 'not detected' rather than an empty tool."""
+    sources = [ClaudeSource(cache_path, claude_dir)]
+    if os.path.isfile(cursor_db):
+        sources.append(CursorSource(cache_path, cursor_db))
+    return sources
+
+
 def collect_sessions(project_dirs, cache_path, claude_dir=CLAUDE_DIR,
-                     days=SESSIONS_DAYS):
-    """[{id, repo, cwd, branch, started, ended, age_min, msgs, tokens,
-    worktree, worktree_live, active}, …] — Claude Code sessions in the
-    dashboard's repos, newest first.
+                     days=SESSIONS_DAYS, sources=None):
+    """[{id, source, repo, cwd, branch, …, worktree_live, active}, …] — agent
+    sessions across the dashboard's repos, newest first, tagged by tool.
+
+    `sources` defaults to Claude-only, so existing callers are unchanged. The
+    app passes [ClaudeSource(...), CursorSource(...)] when a Cursor DB is present.
+    A source that raises is skipped, never fatal — one tool's breakage can't
+    blank the others.
 
     Scoped to `project_dirs` like Worktrees: a session in a repo the dashboard
     doesn't know about isn't part of this workspace's story.
     """
-    entries = _transcripts(cache_path, claude_dir)
     now = datetime.datetime.now()
     cutoff = now - datetime.timedelta(days=days)
+    if sources is None:
+        sources = [ClaudeSource(cache_path, claude_dir)]
     out = []
-    for path, e in entries.items():
-        meta = e.get("meta") or {}
-        cwd = meta.get("cwd") or ""
-        if not cwd:
-            continue
-        cwd = os.path.realpath(cwd)
-        repo = _match_repo(cwd, project_dirs)
-        if not repo:                        # not a dashboard repo — out of scope
-            continue
-        end = _iso_local(meta.get("end"))
-        start = _iso_local(meta.get("start"))
-        if not end or end < cutoff:
-            continue
-        # Every worktree this session touched, not just the one it opened in.
-        # A live one wins: that's the ghost still on disk, and the only one
-        # that's actionable.
-        wts = [os.path.realpath(w) for w in (meta.get("wts") or [])]
-        live = [w for w in wts if os.path.isdir(w)]
-        wt = (live or wts or [""])[0]
-        tokens = [0, 0, 0, 0]
-        for v in (e.get("days") or {}).values():
-            for i in range(4):
-                tokens[i] += v[i]
-        age_min = max(0, int((now - end).total_seconds() / 60))
-        # Footprint — what the session DID, so a row reads as work, not a hex id.
-        # .get with defaults: a cache written before v4 lacks these until reparse.
-        branches = [b for b in (meta.get("branches") or []) if b]
-        out.append({
-            "id": os.path.basename(path)[:8],
-            "repo": repo,
-            "cwd": cwd,
-            "branch": meta.get("branch") or "",
-            "branches": branches,
-            "files": meta.get("files") or [],
-            "dirs": meta.get("dirs") or [],
-            "prs": meta.get("prs") or [],
-            "tools": meta.get("tools") or {},
-            "started": start.isoformat(timespec="minutes") if start else "",
-            "ended": end.isoformat(timespec="minutes"),
-            "age_min": age_min,
-            "mins": (int((end - start).total_seconds() / 60)
-                     if start and end >= start else 0),
-            "msgs": meta.get("msgs") or 0,
-            "tokens": sum(tokens),
-            "worktree": wt,
-            # A worktree still on disk after its session ended is the ghost the
-            # Worktrees view hunts — this is the other end of that story.
-            "worktree_live": bool(live),
-            "active": age_min <= SESSION_ACTIVE_MIN,
-        })
+    for src in sources:
+        try:
+            out.extend(src.sessions(project_dirs, now, cutoff))
+        except Exception:
+            pass                            # a flaky source never blanks the view
     out.sort(key=lambda s: s["age_min"])
     return out
 
@@ -1012,24 +1229,57 @@ def _knum(n):
     return str(n)
 
 
-def sessions_html(sessions):
-    """The Sessions view body: one row per session, newest first, grouped by repo.
-    Metadata only — no prompt or response content ever reaches this page."""
+_SOURCE_LABEL = {"claude": "Claude", "cursor": "Cursor"}
+
+
+def sessions_html(sessions, sources_present=None):
+    """The Sessions view body: one row per session, newest first, grouped by repo,
+    each tagged by the tool that produced it. Metadata only — no prompt or
+    response content ever reaches this page.
+
+    `sources_present` is the tools detected on the machine (from default_sources).
+    It drives the filter: a detected tool with zero in-window sessions still gets
+    a pill (selecting it shows an honest empty), so "quiet" is distinct from
+    "not installed". Defaults to whatever produced rows (back-compat)."""
     esc = html.escape
     live = [s for s in sessions if s["active"]]
     ghosts = [s for s in sessions if s["worktree_live"] and not s["active"]]
+    present = list(sources_present
+                   or sorted({s.get("source") or "claude" for s in sessions}))
+    # per-tool counts for the subtitle, in a stable order
+    counts = {}
+    for s in sessions:
+        k = s.get("source") or "claude"
+        counts[k] = counts.get(k, 0) + 1
+    bysrc = " · ".join(f'{counts[k]} {_SOURCE_LABEL.get(k, k)}'
+                       for k in present if counts.get(k))
     sub = (f'{len(sessions)} session{"s" if len(sessions) != 1 else ""} · '
            f'last {SESSIONS_DAYS} days'
+           + (f' · {bysrc}' if bysrc and len(present) > 1 else "")
            + (f' · {len(live)} live' if live else "")
            + (f' · {len(ghosts)} left a worktree behind' if ghosts else ""))
     out = [f'''<div class="dhead"><span class="dname">Sessions</span>
     <span class="dthesis">{esc(sub) if sessions else "no recent sessions"}</span></div>''']
+
+    # Source filter — only when more than one tool is present. Reuses the .fbtn
+    # pill; sessFilter() (in the template) shows/hides rows by data-src and
+    # collapses emptied repo groups.
+    if len(present) > 1:
+        pills = ['<span class="fbtn on" onclick="sessFilter(this,\'all\')">All</span>']
+        for k in present:
+            pills.append(f'<span class="fbtn" data-cnt="{counts.get(k,0)}" '
+                         f'onclick="sessFilter(this,\'{k}\')">'
+                         f'{esc(_SOURCE_LABEL.get(k,k))}</span>')
+        out.append('<div class="sessfilter">' + "".join(pills) + '</div>')
+
     if not sessions:
+        detected = (" · ".join(_SOURCE_LABEL.get(k, k) for k in present)
+                    if present else "Claude Code")
         out.append(
-            '<div class="vempty">No Claude Code sessions in the last '
-            f'{SESSIONS_DAYS} days for these repos.<br><span class="wtdim">'
-            'Sessions are read from your local <code>~/.claude</code> transcripts '
-            '— timings and counts only, never prompts.</span></div>')
+            f'<div class="vempty">No sessions in the last {SESSIONS_DAYS} days '
+            'for these repos.<br><span class="wtdim">'
+            f'Read locally from {esc(detected)} — timings, files and counts only, '
+            'never prompts.</span></div>')
         return "".join(out)
 
     by_repo = {}
@@ -1089,12 +1339,16 @@ def sessions_html(sessions):
                              '">left a worktree</span>')
             state = ('<span class="wtverdict ok">live</span>' if s["active"]
                      else f'<span class="wtage">{esc(_ago(s["age_min"]))}</span>')
-            body.append(f'''<div class="wtrow">
-  <div class="wtmain">{dot}<span class="wtname">{esc(s["id"])}</span>{branch}{state}</div>
+            # Source tag: tool identity, first on the row. Dot=state, tag=tool —
+            # two orthogonal channels, never overloaded onto one mark.
+            src = s.get("source") or "claude"
+            tag = (f'<span class="ssrc {esc(src)}">{esc(_SOURCE_LABEL.get(src, src))}</span>')
+            body.append(f'''<div class="wtrow" data-src="{esc(src)}">
+  <div class="wtmain">{dot}{tag}<span class="wtname">{esc(s["id"])}</span>{branch}{state}</div>
   <div class="wtpath" title="{esc(s["cwd"], quote=True)}">{footline}</div>
   <div class="wtchips">{"".join(chips)}</div>
 </div>''')
-        out.append(f'''<div class="sgroup">
+        out.append(f'''<div class="sgroup" data-sessgroup>
   <div class="sgtitle">{esc(repo)}<span class="wtcount">{len(rows)}</span></div>
   {"".join(body)}
 </div>''')

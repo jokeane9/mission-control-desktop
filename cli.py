@@ -227,9 +227,10 @@ def cmd_standup(args):
 def cmd_sessions(args):
     cfg, cache = load(args)
     projects, _ = generate.workspace(cfg, cache)
+    scache = os.path.join(generate.DATA, "token_cache.json")
     sessions = views.collect_sessions(
-        project_dirs(projects), os.path.join(generate.DATA, "token_cache.json"),
-        days=args.days)
+        project_dirs(projects), scache, days=args.days,
+        sources=views.default_sources(scache))   # Claude + Cursor when present
 
     def render(_):
         if not sessions:
@@ -247,6 +248,10 @@ def cmd_sessions(args):
                 cur = s["repo"]
                 print(bold(cur))
             mark = green("●") if s["active"] else dim("○")
+            src = s.get("source") or "claude"
+            pad = src.ljust(6)               # pad the plain text, THEN colour
+            tag = (blue(pad) if src == "claude"
+                   else _c("35", pad) if src == "cursor" else dim(pad))
             when = green("live") if s["active"] else views._ago(s["age_min"])
             br = (f'{len(s["branches"])} branches' if len(s["branches"]) > 1
                   else (s["branch"] or "—"))
@@ -255,7 +260,7 @@ def cmd_sessions(args):
                 bits.append(blue(" ".join("#" + p["num"] for p in s["prs"][:4])))
             if s["worktree_live"]:
                 bits.append(amber("left a worktree"))
-            print(f'  {mark} {s["id"]}  {dim(br[:18].ljust(18))} '
+            print(f'  {mark} {tag} {s["id"]}  {dim(br[:18].ljust(18))} '
                   f'{when.rjust(8)}  {dim(" · ".join(bits))}')
             # The footprint — what the session did, so the id isn't a blank.
             fp = []
