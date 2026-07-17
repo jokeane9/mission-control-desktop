@@ -5,23 +5,56 @@ items, reorder if priorities shifted, add anything new. Now / Next / Later.
 
 ---
 
+## The wedge (read before prioritising)
+
+**Orrery's differentiator is not the git dashboard.** Every tool shows branch and
+dirty count. Look instead at what actually got built: a Skills catalog, a Claude
+token chart, and a Worktrees view that exists *specifically* because interrupted
+Claude Code sessions strand checkouts under `.claude/worktrees/`. That's three
+features about **the state your agents leave behind across many repos** — and
+nobody else ships it.
+
+The evidence it's real: on 2026-07-16 the Worktrees view was built because six
+ghost worktrees, up to 68 days old, were sitting in two repos where no
+`git status` would ever mention them.
+
+So the strategy is: **be the dashboard for agent-assisted development**, and let
+the git state be the table stakes underneath it. Sessions ([#39](https://github.com/jokeane9/orrery/issues/39))
+is the deliberate version of what Worktrees stumbled into. Weigh new work against
+that, not against "what would a git dashboard have?"
+
+The second lesson from the same day: the maintainer, faced with a real problem,
+wrote a **bash script** (`~/.local/bin/wt`), not a window. Devs live in the
+terminal. The CLI ([#38](https://github.com/jokeane9/orrery/issues/38)) isn't a
+side quest — it's the surface that matches the instinct, and it routes around the
+distribution friction (Gatekeeper, notarization) entirely.
+
 ## Now
 
-- [ ] **v2.0.0 — rename to Orrery** (in review). Settles the name question and
-      kills the `open -a` collision with Apple's Mission Control. Carries three
-      migrations (data dir, keychain, per-repo block files) so pre-2.0 installs
-      upgrade without losing config. A full-app UX audit is captured in
-      [`UX-AUDIT.md`](UX-AUDIT.md); the interaction model in
-      [`UX-FLOWS.md`](UX-FLOWS.md).
+- [ ] **CLI — `orrery status` / `worktrees` / `standup` / `--json`**
+      ([#38](https://github.com/jokeane9/orrery/issues/38)). Cheap: the engine is
+      stdlib-only and already runs standalone, and `views.py` is already split
+      into pure `collect_*()` + `*_html()`. A formatter over functions that exist.
+      No Gatekeeper, no notarization, scriptable.
+- [ ] **Sessions view** ([#39](https://github.com/jokeane9/orrery/issues/39)) —
+      what your agents are doing and what they abandoned. `collect_tokens()`
+      already parses `~/.claude` transcripts; this is a second `collect_*()` over
+      data the render path already reads. Pairs with Worktrees: the ghost and the
+      session that stranded it are one story.
 
 ## Next
 
-- [ ] **v1.6.1 — the two UX "wrong thing" bugs** (from UX-AUDIT): PM autosave
-      races the 15-min page refresh → possible edit loss; **"Copy as standup"
-      ignores the filter and only copies yesterday** (empty on Mondays). Fix
-      first — they misbehave silently.
-- [ ] **Attention-first hero line** — replace "Today · N commits" with a
-      "what needs you" rollup on the overview. (UX-AUDIT · IA F2)
+- [ ] **Uncloned repos can't be grouped or annotated**
+      ([#40](https://github.com/jokeane9/orrery/issues/40)) — `resolve.overrides()`
+      matches by path, so an uncloned repo can never take a manual group. Found
+      while organising 28 projects: the only workaround was to clone the repo.
+      Fix by matching on identity, which `discover()` already does. **A real bug,
+      not a preference.**
+- [ ] **`roots` ignore list** ([#41](https://github.com/jokeane9/orrery/issues/41)) —
+      `~/projects/_archive/` scans as live work. One repo today; archives only grow.
+- [ ] **⌘K palette** ([#42](https://github.com/jokeane9/orrery/issues/42)) —
+      shortcuts stop at ⌘9; a real workspace has 28 projects, so 19 have no
+      keyboard path. `skills` already has the search pattern to generalise.
 - [ ] **Editor onboarding** — thesis before tier/group; `tier` → `<select>`;
       path validation/`.git` check. (UX-AUDIT · detail F2–F4)
 - [ ] **Provenance made usable** — a legend + clickable "guess" → jump to that
@@ -51,8 +84,29 @@ items, reorder if priorities shifted, add anything new. Now / Next / Later.
 
 ---
 
+## Deliberate noes
+
+Written down so they don't get relitigated every quarter.
+
+- **"What changed since you last looked" / delta view.** Tempting — it sounds like
+  the actual job. But a delta needs remembered state, which fights principle #3
+  (live from disk, no database) and adds a sync layer that can drift. The
+  attention rollup already answers "what needs you" with zero stored state.
+- **CI / build status.** Users will ask. PRODUCT.md's non-goal stands: scraping CI
+  means tokens, network, and polling in the render path — that's a different
+  product, and it breaks the offline-engine principle (#4).
+
 ## Completed
 
+- [x] 2026-07-16 — **v2.0.0 — renamed Mission Control → Orrery** (#37): the old
+      name collided with Apple's window manager, and not cosmetically —
+      `open -a "Mission Control"` silently launched Apple's app, so the most
+      common scripted launch path did nothing. Carried three migrations, each of
+      which fails silently if it regresses: data dir (config would be orphaned →
+      app opens empty), keychain service (token orphaned → looks like a logout),
+      and per-repo `.mission-control.*` block files (live in *users'* repos, so
+      the fallback is permanent). Cask renamed with `cask_renames.json`; verified
+      a real 1.7.0 → 2.0.0 upgrade preserving config byte-for-byte.
 - [x] 2026-07-16 — **Worktrees view** (v1.7.0, #36): `views.collect_worktrees()`
       + a workspace tab listing every extra checkout — repo, path, branch/
       detached, age, uncommitted, unmerged — each with a safe-to-remove verdict
