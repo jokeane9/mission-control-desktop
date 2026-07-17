@@ -184,7 +184,12 @@ def collect(repo):
     ab = git(repo, "rev-list", "--left-right", "--count", "@{upstream}...HEAD")
     d["behind"], d["ahead"] = (ab.split() + ["0", "0"])[:2] if ab else ("0", "0")
     base = default_branch(repo)
-    unmerged = git(repo, "branch", "-r", "--no-merged", base) if base else ""
+    # LOCAL branches not merged into the default branch — your own work in
+    # progress. Not `-r`: remote branches are every open PR in the repo, so a
+    # project cloned to read (langflow: 1884, dspy: 366) would read as "needs
+    # attention" forever. You can't merge a branch you never checked out; the
+    # ones you can are local. (HEAD guard covers the detached-HEAD placeholder.)
+    unmerged = git(repo, "branch", "--no-merged", base) if base else ""
     d["unmerged"] = len([l for l in unmerged.splitlines()
                          if l.strip() and "HEAD" not in l])
     d["stashes"] = len(git(repo, "stash", "list").splitlines())
