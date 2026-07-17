@@ -1,13 +1,19 @@
 # Orrery
 
-One window, every project's live state. Orrery scans your local git
-repos and renders a dark, keyboard-driven dashboard: per-project cards with
-branch / uncommitted / unmerged / unpushed chips, plus the human facts no tool
-can derive — what the project *is*, where prod lives, which accounts it's tied
-to, and the one thing you're pushing on right now.
+The observability layer for agent-assisted development: every repo's live
+state, and what your agents left behind, in one local window.
 
-Git data is read live from each repo. The human facts live in one editable
-JSON file. Nothing leaves your machine — no server, no telemetry, no accounts.
+Orrery scans your local git repos and renders a dark, keyboard-driven
+dashboard — per-project cards with branch / uncommitted / unmerged / unpushed
+chips, next to the human facts no tool can derive: what the project *is*, where
+prod lives, and the one thing you're pushing on. On top of that it carries
+whole-workspace views: a **Sessions** view of what your agents did and what
+they left behind, a **Work Log** of commits and token usage over time, plus
+Skills, Roadmap, and Worktrees.
+
+Git data is read live from each repo on every render. The human facts live in
+one editable JSON file. Nothing leaves your machine — no server, no telemetry,
+no accounts.
 
 ## Install
 
