@@ -6,6 +6,8 @@ All notable changes to Mission Control are documented here. Format follows
 platforms.
 
 ## [Unreleased]
+
+## [1.7.0] — 2026-07-16
 ### Added
 - **Worktrees view** — every extra checkout across your repos in one place, with
   a safe-to-remove verdict on each. A worktree is a second folder checked out

@@ -7,11 +7,9 @@ items, reorder if priorities shifted, add anything new. Now / Next / Later.
 
 ## Now
 
-- [ ] **v1.7.0 — Worktrees view** (in review). Lists every extra checkout across
-      the repos with a safe-to-remove verdict, closing the "invisible state"
-      hole: ghost worktrees under `.claude/worktrees/` that no `git status`
-      reports. A full-app UX audit is captured in [`UX-AUDIT.md`](UX-AUDIT.md);
-      the interaction model in [`UX-FLOWS.md`](UX-FLOWS.md).
+- [ ] Nothing in flight. `main` clean, released through **v1.7.0**. A full-app
+      UX audit is captured in [`UX-AUDIT.md`](UX-AUDIT.md); the interaction
+      model in [`UX-FLOWS.md`](UX-FLOWS.md).
 
 ## Next
 
@@ -53,6 +51,15 @@ items, reorder if priorities shifted, add anything new. Now / Next / Later.
 
 ## Completed
 
+- [x] 2026-07-16 — **Worktrees view** (v1.7.0, #36): `views.collect_worktrees()`
+      + a workspace tab listing every extra checkout — repo, path, branch/
+      detached, age, uncommitted, unmerged — each with a safe-to-remove verdict
+      (clean tree AND HEAD reachable from a branch; anything else says NO and
+      why). Closes the invisible-state hole: ghost worktrees left under
+      `.claude/worktrees/` by interrupted Claude Code sessions, which no
+      `git status` reports. Ported from a local bash script, fixing its
+      macOS-only `stat -f %m` (would have broken the Windows build) and its
+      dead unmerged count.
 - [x] 2026-07-14 — **Groups become folders + triage + keyboard a11y** (v1.6.0,
       #33): click-a-group folder filter + breadcrumb, drag-and-drop reorder/move
       (localStorage), attention rollup dots, attention→tier sort, WCAG-AA
