@@ -9,8 +9,15 @@ star. If a product decision isn't captured here, it's not decided.
 
 ## One-liner
 
-**One dark window that shows the live state of every git project you're working
-on — and the human context no tool can derive.**
+**The observability layer for agent-assisted development: every repo's state,
+and what your agents left behind, in one local window.**
+
+The insight underneath it: agentic coding abstracts *doing* into *directing*, so
+the ground-truth model you used to build for free — every branch, edit, and
+stray checkout that passed through your hands — is gone. Orrery re-concretizes
+it, reading git, your repos' own docs, and your `~/.claude` activity to show
+where everything stands and what your agents left behind. It restores
+*visibility*, not control: it tells you the state, it doesn't act on it.
 
 ## What it is
 
