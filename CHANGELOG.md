@@ -7,6 +7,27 @@ platforms.
 
 ## [Unreleased]
 
+## [2.4.0] — 2026-07-17
+### Added
+- **Sessions now reads Cursor too.** The Sessions view is no longer Claude-only —
+  it reads Cursor's local session database alongside `~/.claude`, so a Claude and
+  a Cursor session that both touched a repo sit side by side, each tagged by tool.
+  - **One view, not two tabs** — a lightweight `All · Claude · Cursor` filter and a
+    per-row source badge (Claude blue, Cursor purple). Tool identity is a tag; the
+    live/idle dot stays state. Stacking beats splitting.
+  - **Still local, still read-only.** Cursor keeps sessions in a SQLite DB; Orrery
+    opens it read-only + immutable (never locks a running Cursor) and reads
+    **metadata only** — files, branches, timings, tool names. Never prompts. No
+    integration, no network, no account.
+  - **Honest gaps.** Cursor records no token counts, PR links, or local worktrees,
+    so those stay blank rather than faked. What it does give — repo, branches,
+    files edited, message counts, and lines added/removed — all show.
+  - `orrery sessions` tags each row by tool as well.
+- Reason for the scope: **only Sessions can carry tool identity.** Git records no
+  tool on a commit or worktree, so Work Log and Worktrees stay tool-agnostic — the
+  design/build rationale is in `project-management/multitool-sessions-plan.md`.
+
+
 ## [2.3.0] — 2026-07-17
 ### Added
 - **Session footprints.** Each session row now shows *what it did*, not just a
