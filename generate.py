@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Mission Control — one dark shell, every project's live state + maps.
+"""Orrery — one dark shell, every project's live state + maps.
 Usage: ./generate.py [--open] [--watch]   (stdlib only, no deps)
 Git data live from each repo · human facts from baseline.json · maps via vizstack/agentviz.
 Design language matches codebase-viz/vizstack (GitHub-dark, SF Mono).
@@ -9,7 +9,8 @@ from pathlib import Path
 import resolve  # sibling: discover() + resolve() — offline auto-populate (P1)
 import views    # sibling: top-level views (Skills catalog, …)
 
-APP_NAME = "Mission Control"
+APP_NAME = "Orrery"
+LEGACY_APP_NAME = "Mission Control"     # pre-2.0 name; see _migrate_data_dir()
 FROZEN = getattr(sys, "frozen", False)          # True inside a PyInstaller build
 HERE = (os.path.dirname(os.path.abspath(sys.executable)) if FROZEN
         else os.path.dirname(os.path.abspath(__file__)))
@@ -24,20 +25,50 @@ def resource_path(name):
     return os.path.join(base, name)
 
 
+def _app_data_base():
+    """The OS's per-user app-data root."""
+    if sys.platform == "darwin":
+        return os.path.expanduser("~/Library/Application Support")
+    if os.name == "nt":
+        return os.environ.get("APPDATA", os.path.expanduser("~"))
+    return os.environ.get("XDG_DATA_HOME", os.path.expanduser("~/.local/share"))
+
+
+def _migrate_data_dir(base, new):
+    """v2.0.0 renamed the app, and the data dir is keyed off the name — so an
+    upgrading user's config would sit orphaned under the old one and the app
+    would open empty, looking like it lost their work. Move it across, once.
+
+    Only fires when the new dir doesn't exist yet and the old one does, so it
+    can never clobber newer data. Copy-then-leave rather than move: if anything
+    here fails, the old dir is still intact and the user can be pointed at it.
+    Best-effort by design — a failed migration must not stop the app booting.
+    Removal criterion: drop this once no supported version predates 2.0.0."""
+    old = os.path.join(base, LEGACY_APP_NAME)
+    if os.path.exists(new) or not os.path.isdir(old):
+        return False
+    try:
+        shutil.copytree(old, new)
+        return True
+    except Exception as e:                       # never fatal: a fresh dir works
+        print(f"[{APP_NAME}] could not migrate config from {old}: {e}",
+              file=sys.stderr)
+        try:
+            os.makedirs(new, exist_ok=True)
+        except OSError:
+            pass
+        return False
+
+
 def _data_dir():
     """Where config + generated output live. Running from source: next to the
     script (unchanged dev workflow). Installed app: per-user app-data dir,
     because the bundle itself is read-only once signed/installed."""
     if not FROZEN:
         return HERE
-    if sys.platform == "darwin":
-        base = os.path.expanduser("~/Library/Application Support")
-    elif os.name == "nt":
-        base = os.environ.get("APPDATA", os.path.expanduser("~"))
-    else:
-        base = os.environ.get("XDG_DATA_HOME",
-                              os.path.expanduser("~/.local/share"))
+    base = _app_data_base()
     d = os.path.join(base, APP_NAME)
+    _migrate_data_dir(base, d)                   # pre-2.0 config, if any
     os.makedirs(d, exist_ok=True)
     return d
 
@@ -276,7 +307,7 @@ def chips(g):
 # Provenance badge labels: (visible text, tooltip). Heuristic values are marked
 # "guess" in amber to signal they were inferred from prose, not stated.
 _PROV_LABEL = {
-    "block":     ("auto",  "from a .mission-control / CLAUDE.md block"),
+    "block":     ("auto",  "from a .orrery / CLAUDE.md block"),
     "metadata":  ("auto",  "from package.json / git remote"),
     "heuristic": ("guess", "guessed from CLAUDE.md / README prose"),
     "computed":  ("auto",  "derived (e.g. the folder name)"),
@@ -496,7 +527,7 @@ def main():
              f'Unpushed <b>{totals["ahead"]}</b>')
 
     tpl = """<!doctype html><html><head><meta charset="utf-8">
-<title>Mission Control</title>
+<title>Orrery</title>
 <!-- periodic reload is JS-driven (mcReload) so it can defer while the PM scratchpad has unsaved edits -->
 <style>
 :root{--bg:#0d1117;--panel:#161b22;--panel2:#1c2129;--border:#21262d;--border2:#30363d;
@@ -760,7 +791,7 @@ body:not(.nobridge) .nobridgeonly{display:none}
 <body class="nobridge">
 <div class="app">
   <div class="side">
-    <div class="brand">mission-control</div>
+    <div class="brand">orrery</div>
     <div class="sitem on" id="s-overview" onclick="nav('overview')"><span class="dot green"></span><span class="sname">overview</span><span class="skey">⌘0</span></div>
     %%TOPSIDE%%
     <div class="shead">Projects (%%COUNT%%)</div>
@@ -1016,7 +1047,7 @@ function submitEditor(){
   }).catch(function(){btn.disabled=false;btn.textContent='Save';err.textContent='Save failed.';});
 }
 function removeProject(name){
-  if(!confirm('Remove “'+name+'” from Mission Control?\\nThis only edits baseline.json — it does not touch the repo.'))return;
+  if(!confirm('Remove “'+name+'” from Orrery?\\nThis only edits baseline.json — it does not touch the repo.'))return;
   if(!(bridge()&&window.pywebview.api.delete_project))return;
   window.pywebview.api.delete_project(name).then(function(r){if(r&&r.ok)location.reload();});
 }

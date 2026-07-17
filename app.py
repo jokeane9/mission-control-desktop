@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Mission Control — native desktop window (Dock app).
+"""Orrery — native desktop window (Dock app).
 Regenerates the dashboard, then renders index.html in a real app window
 via pywebview. Distinct from menubar.py (the always-on menu-bar icon).
 
 Run:  ./.venv/bin/python app.py
-Packaged as "Mission Control.app" — see build_app.sh.
+Packaged as "Orrery.app" — see build_app.sh.
 """
 import os, sys, threading, time, subprocess, traceback, webbrowser, webview
 import webview.menu as wm
@@ -16,7 +16,7 @@ import github_sync as ghsync  # sibling: list repos → github_cache.json — P3
 
 INDEX = generate.INDEX
 ICON = generate.resource_path("icon.icns")
-REPO = "https://github.com/jokeane9/mission-control-desktop"
+REPO = "https://github.com/jokeane9/orrery"
 WINDOW = None            # set in main(); menu handlers drive the page through it
 
 
@@ -144,7 +144,7 @@ def _brand_dock():
         from Foundation import NSBundle
         # rename: patch the (python framework) main bundle's info dict in place
         info = NSBundle.mainBundle().infoDictionary()
-        info["CFBundleName"] = "Mission Control"
+        info["CFBundleName"] = "Orrery"
         app = NSApplication.sharedApplication()
         if os.path.isfile(ICON):
             app.setApplicationIconImage_(
@@ -206,7 +206,7 @@ def _menu():
             wm.MenuAction("Disconnect", lambda: _js("ghDisconnect()")),
         ]),
         wm.Menu("Help", [
-            wm.MenuAction("Mission Control on GitHub", lambda: webbrowser.open(REPO)),
+            wm.MenuAction("Orrery on GitHub", lambda: webbrowser.open(REPO)),
             wm.MenuAction("Report an Issue", lambda: webbrowser.open(REPO + "/issues")),
         ]),
     ]
@@ -221,7 +221,7 @@ def main():
     _brand_dock()
     threading.Thread(target=_regen_loop, daemon=True).start()
     WINDOW = webview.create_window(
-        "Mission Control",
+        "Orrery",
         url=f"file://{INDEX}",
         width=1240, height=900,
         min_size=(760, 560),

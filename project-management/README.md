@@ -1,6 +1,6 @@
 # project-management/
 
-The PM system for Mission Control. If a decision isn't written here (or in
+The PM system for Orrery. If a decision isn't written here (or in
 `CLAUDE.md` / `DISTRIBUTION.md`), it's lost. Don't read every file at session
 start — open the one relevant to what you're doing.
 

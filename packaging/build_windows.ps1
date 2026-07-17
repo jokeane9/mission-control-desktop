@@ -14,8 +14,8 @@ $Version = $Version -replace '^v', ''                    # v1.0.0 -> 1.0.0
 if (Test-Path build) { Remove-Item -Recurse -Force build }
 if (Test-Path dist)  { Remove-Item -Recurse -Force dist }
 
-pyinstaller --noconfirm packaging/mission_control.spec
-if (-not (Test-Path "dist/Mission Control")) { throw "build failed" }
+pyinstaller --noconfirm packaging/orrery.spec
+if (-not (Test-Path "dist/Orrery")) { throw "build failed" }
 
 # WebView2 Evergreen bootstrapper (tiny stub; installer runs it if the runtime
 # is missing — Win11 and current Win10 ship WebView2, older Win10 may not)
@@ -25,13 +25,13 @@ if (-not (Test-Path $bootstrap)) {
 }
 
 # zip fallback (portable)
-Compress-Archive -Path "dist/Mission Control" -DestinationPath "dist/MissionControl-$Version-win64.zip" -Force
+Compress-Archive -Path "dist/Orrery" -DestinationPath "dist/Orrery-$Version-win64.zip" -Force
 
 # Inno Setup installer
 $iscc = Get-Command iscc -ErrorAction SilentlyContinue
 if ($iscc) {
     & $iscc /DAppVersion=$Version packaging/windows/installer.iss
-    Write-Host "installer: dist/MissionControl-$Version-setup.exe"
+    Write-Host "installer: dist/Orrery-$Version-setup.exe"
 } else {
     Write-Host "iscc not found - skipped installer, zip only"
 }

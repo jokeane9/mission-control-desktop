@@ -1,6 +1,6 @@
-# Auto-populate: the `mission-control` structured block (P1)
+# Auto-populate: the `orrery` structured block (P1)
 
-Design draft for [#15](https://github.com/jokeane9/mission-control-desktop/issues/15),
+Design draft for [#15](https://github.com/jokeane9/orrery/issues/15),
 phase 1. The **reliable** path for a repo to describe its own card — explicit,
 exact, versioned next to the code. Heuristic parsing of prose is a bonus on top;
 this block is what a repo owner writes when they want the card *right*.
@@ -15,11 +15,11 @@ from metadata/heuristics); the block just overrides those guesses.
 A repo may use either. If both are present, the dedicated file wins (it's the more
 explicit choice), then the CLAUDE.md/AGENTS.md frontmatter.
 
-**1. A dedicated file at repo root** — `.mission-control.yml` (or `.json`).
+**1. A dedicated file at repo root** — `.orrery.yml` (or `.json`).
 Fields are top-level:
 
 ```yaml
-# .mission-control.yml
+# .orrery.yml
 thesis: "Velocio Visibility Index — multi-brand SaaS, live"
 tier: major
 prod: https://app.vizidex.app
@@ -27,13 +27,13 @@ stack: "Remix + Tailwind + shadcn · Supabase"
 arch: DEPLOY-ENV.md
 ```
 
-**2. A `mission-control:` key in the YAML frontmatter of `CLAUDE.md` / `AGENTS.md`**
+**2. A `orrery:` key in the YAML frontmatter of `CLAUDE.md` / `AGENTS.md`**
 — co-located with the agent doc, namespaced so it can't collide with anything else
 the frontmatter carries:
 
 ```markdown
 ---
-mission-control:
+orrery:
   thesis: "Shopify competitor-intel app pivoting to a promo control plane"
   tier: major
   prod: https://shelfplugin.com
@@ -77,7 +77,7 @@ All fields optional. Types are strings unless noted.
 | `version` | integer | `1` | Block schema version, for forward-compat. |
 
 **Forward-compat rule:** unknown keys are ignored (warn in a debug log, never
-error), so newer blocks stay readable by older Mission Control builds.
+error), so newer blocks stay readable by older Orrery builds.
 
 ---
 
@@ -102,7 +102,7 @@ transparent for anything it leaves out. Every card field is tagged `auto` vs
 **Minimal** — name + thesis, everything else auto-derived:
 
 ```yaml
-# .mission-control.yml
+# .orrery.yml
 thesis: "AI WooCommerce diagnostics — WP plugin → Claude root-cause analysis"
 tier: major
 ```
@@ -110,7 +110,7 @@ tier: major
 **Opt out** — a repo you never want on the board:
 
 ```yaml
-# .mission-control.yml
+# .orrery.yml
 hidden: true
 ```
 
@@ -125,7 +125,7 @@ Ships with the app and can run in a repo's own CI to catch typos before commit:
 ```json
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "mission-control project block",
+  "title": "orrery project block",
   "type": "object",
   "additionalProperties": true,
   "properties": {
@@ -166,7 +166,7 @@ forward-compat rule (ignore unknown keys) is enforced.
 - The block maps 1:1 onto today's `baseline.json` project shape, so P1 can reuse
   the existing `PROJECT_FIELDS` and render path unchanged — discovery just becomes
   another source feeding the same card.
-- Reading a dedicated `.mission-control.yml` and reading a doc's `##` outline are
+- Reading a dedicated `.orrery.yml` and reading a doc's `##` outline are
   both already-solved shapes (`load_config`, `arch_outline`), so P1 is mostly a
   new resolver in front of the existing renderer, not new UI.
 - YAML frontmatter parsing is the one new dependency; keep it minimal (a tiny

@@ -11,8 +11,8 @@ set -euo pipefail
 VERSION="${1:?usage: stamp.sh <version, e.g. 1.1.0>}"
 VERSION="${VERSION#v}"
 HERE="$(cd "$(dirname "$0")" && pwd)"
-REPO="jokeane9/mission-control-desktop"
-URL="https://github.com/${REPO}/releases/download/v${VERSION}/MissionControl-${VERSION}-setup.exe"
+REPO="jokeane9/orrery"
+URL="https://github.com/${REPO}/releases/download/v${VERSION}/Orrery-${VERSION}-setup.exe"
 
 TMP="$(mktemp)"; trap 'rm -f "$TMP"' EXIT
 echo "downloading ${URL}"
@@ -20,11 +20,11 @@ curl -fsSL -o "$TMP" "$URL"
 SHA="$(shasum -a 256 "$TMP" | awk '{print toupper($1)}')"   # winget expects uppercase hex
 echo "sha256: ${SHA}"
 
-OUT="${HERE}/out/manifests/j/JohnOKeane/MissionControl/${VERSION}"
+OUT="${HERE}/out/manifests/j/JohnOKeane/Orrery/${VERSION}"
 rm -rf "${HERE}/out"; mkdir -p "$OUT"
-for f in JohnOKeane.MissionControl.installer.yaml \
-         JohnOKeane.MissionControl.locale.en-US.yaml \
-         JohnOKeane.MissionControl.yaml; do
+for f in JohnOKeane.Orrery.installer.yaml \
+         JohnOKeane.Orrery.locale.en-US.yaml \
+         JohnOKeane.Orrery.yaml; do
   # Drop the "# Template:" note (source-only) but keep the schema comment and
   # the explanatory inline comments; then fill the placeholders.
   grep -v '^# Template:' "${HERE}/${f}" \

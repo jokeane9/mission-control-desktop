@@ -1,6 +1,6 @@
 # -*- mode: python ; coding: utf-8 -*-
-"""PyInstaller spec — builds Mission Control for macOS (.app) and Windows (dir).
-Run from the repo root:  pyinstaller packaging/mission_control.spec
+"""PyInstaller spec — builds Orrery for macOS (.app) and Windows (dir).
+Run from the repo root:  pyinstaller packaging/orrery.spec
 
 Signing (macOS): set CODESIGN_IDENTITY to a "Developer ID Application: ..."
 identity and PyInstaller signs every nested binary with the hardened runtime
@@ -30,7 +30,7 @@ exe = EXE(
     pyz,
     a.scripts,
     exclude_binaries=True,
-    name="Mission Control",
+    name="Orrery",
     console=False,
     icon=os.path.join(ROOT, "packaging", "icon.ico") if not MAC else None,
     codesign_identity=os.environ.get("CODESIGN_IDENTITY"),
@@ -41,15 +41,15 @@ coll = COLLECT(
     exe,
     a.binaries,
     a.datas,
-    name="Mission Control",
+    name="Orrery",
 )
 
 if MAC:
     app = BUNDLE(
         coll,
-        name="Mission Control.app",
+        name="Orrery.app",
         icon=os.path.join(ROOT, "icon.icns"),
-        bundle_identifier="com.keane.mission-control",
+        bundle_identifier="com.keane.orrery",
         info_plist={
             "CFBundleShortVersionString": VERSION,
             "NSHighResolutionCapable": True,

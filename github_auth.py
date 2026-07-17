@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""GitHub auth for Mission Control (P3.1). The token lives in the OS keychain and
+"""GitHub auth for Orrery (P3.1). The token lives in the OS keychain and
 nowhere else; there is no repo sync yet (that's github_sync.py, P3.2). The only
 network call is validating a token the user pasted, against GitHub's /user.
 
@@ -9,7 +9,8 @@ import json, os, urllib.request
 
 import generate  # for the per-user data dir (generate.DATA)
 
-_SERVICE = "MissionControl-GitHub"
+_SERVICE = "Orrery-GitHub"
+_LEGACY_SERVICE = "MissionControl-GitHub"   # pre-2.0; see get_token()
 _ACCOUNT = "pat"
 
 
@@ -28,17 +29,35 @@ def store_token(token):
 
 
 def get_token():
+    """The stored PAT, or None. v2.0.0 renamed the keychain service along with
+    the app; a token saved before that still lives under the old name. Fall back
+    to it and re-save under the new one, so the rename doesn't silently log the
+    user out (an absent token degrades to "disconnected" — it would look like a
+    bug, not a migration). Removal criterion: drop the fallback once no
+    supported version predates 2.0.0."""
     try:
-        return _keyring().get_password(_SERVICE, _ACCOUNT)
+        token = _keyring().get_password(_SERVICE, _ACCOUNT)
+    except Exception:
+        return None
+    if token:
+        return token
+    try:
+        token = _keyring().get_password(_LEGACY_SERVICE, _ACCOUNT)
+        if token:
+            _keyring().set_password(_SERVICE, _ACCOUNT, token)
+        return token
     except Exception:
         return None
 
 
 def clear_token():
-    try:
-        _keyring().delete_password(_SERVICE, _ACCOUNT)
-    except Exception:
-        pass
+    """Disconnect. Clears both names — leaving the legacy entry behind would let
+    get_token() resurrect it on the next call."""
+    for svc in (_SERVICE, _LEGACY_SERVICE):
+        try:
+            _keyring().delete_password(svc, _ACCOUNT)
+        except Exception:
+            pass
 
 
 # --- non-secret cached login, so status() needs no network ------------------

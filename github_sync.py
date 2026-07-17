@@ -13,7 +13,10 @@ import resolve       # normalize_remote, block parsers (shared with the resolver
 
 API = "https://api.github.com"
 _MAX_PAGES = 10                       # cap at 1000 repos
-_BLOCK_FILES = (".mission-control.json", ".mission-control.yml",
+# Mirrors resolve.BLOCK_JSON/BLOCK_YAML order — new name first, legacy accepted.
+# One request per name, so keep the list to the spellings actually in the wild.
+_BLOCK_FILES = (".orrery.json", ".orrery.yml",
+                ".mission-control.json", ".mission-control.yml",
                 "CLAUDE.md", "AGENTS.md")
 
 
@@ -73,9 +76,10 @@ def _fetch_block(token, full_name, ref):
         elif fn.endswith((".yml", ".yaml")):
             return resolve.parse_mini_yaml(content)
         else:  # CLAUDE.md / AGENTS.md frontmatter
-            sub = resolve._frontmatter_block(content, "mission-control")
-            if sub:
-                return resolve.parse_mini_yaml(sub)
+            for key in resolve.BLOCK_KEYS:
+                sub = resolve._frontmatter_block(content, key)
+                if sub:
+                    return resolve.parse_mini_yaml(sub)
     return {}
 
 

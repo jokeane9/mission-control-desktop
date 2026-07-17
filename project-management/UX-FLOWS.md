@@ -1,6 +1,6 @@
 # UX Flows — the interaction model
 
-How Mission Control is meant to be navigated and operated, as of v1.6.0. This is
+How Orrery is meant to be navigated and operated, as of v1.6.0. This is
 the canonical description of the user-facing model; when you change an
 interaction, update this file.
 

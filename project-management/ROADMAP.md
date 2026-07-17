@@ -7,9 +7,12 @@ items, reorder if priorities shifted, add anything new. Now / Next / Later.
 
 ## Now
 
-- [ ] Nothing in flight. `main` clean, released through **v1.7.0**. A full-app
-      UX audit is captured in [`UX-AUDIT.md`](UX-AUDIT.md); the interaction
-      model in [`UX-FLOWS.md`](UX-FLOWS.md).
+- [ ] **v2.0.0 — rename to Orrery** (in review). Settles the name question and
+      kills the `open -a` collision with Apple's Mission Control. Carries three
+      migrations (data dir, keychain, per-repo block files) so pre-2.0 installs
+      upgrade without losing config. A full-app UX audit is captured in
+      [`UX-AUDIT.md`](UX-AUDIT.md); the interaction model in
+      [`UX-FLOWS.md`](UX-FLOWS.md).
 
 ## Next
 
@@ -28,24 +31,23 @@ items, reorder if priorities shifted, add anything new. Now / Next / Later.
 - [ ] **Design-system tightening** — consolidate the badge vocabulary
       (`.eyebrow`/`.pill`), adopt a type-scale token set, shape-encode git state
       for colorblindness. (UX-AUDIT · global F4/F7/F8)
-- [ ] **Windows code signing** ([#7](https://github.com/jokeane9/mission-control-desktop/issues/7)) —
+- [ ] **Windows code signing** ([#7](https://github.com/jokeane9/orrery/issues/7)) —
       SignPath enrollment → activates the already-wired step. Owner action.
-- [ ] **winget listing** ([#8](https://github.com/jokeane9/mission-control-desktop/issues/8)) —
+- [ ] **winget listing** ([#8](https://github.com/jokeane9/orrery/issues/8)) —
       manifests verified/prepped; blocked on #7.
 - [ ] **Post the launch** — Show HN / r/programming / X drafts ready
-      ([#11](https://github.com/jokeane9/mission-control-desktop/issues/11) is
+      ([#11](https://github.com/jokeane9/orrery/issues/11) is
       done — blog post live on killdate.dev).
 
 ## Later
 
-- [ ] **P4 — LLM extraction** ([#15](https://github.com/jokeane9/mission-control-desktop/issues/15)) —
+- [ ] **P4 — LLM extraction** ([#15](https://github.com/jokeane9/orrery/issues/15)) —
       feed a repo's CLAUDE.md to Claude to distill card fields for repos without a
       structured block. Opt-in, needs an API key + disclosure. **Deferred by decision.**
 - [ ] **macOS notarization** — Apple Developer Program ($99/yr) + 6 secrets.
       CI ready. (`platform:mac`, `signing`)
 - [ ] **Tahoe icon polish** — `.icon` (Icon Composer) + `Assets.car` for macOS 26. Cosmetic. (`platform:mac`)
 - [ ] **Blog launch post** — the open-source / donation announcement.
-- [ ] **Name decision** — "Mission Control" collides with Apple's window manager.
 
 ---
 

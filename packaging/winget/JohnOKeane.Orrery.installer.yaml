@@ -1,6 +1,6 @@
 # yaml-language-server: $schema=https://aka.ms/winget-manifest.installer.1.6.0.schema.json
 # Template: __VERSION__ / __INSTALLER_URL__ / __SHA256__ are filled by stamp.sh <version> (README.md).
-PackageIdentifier: JohnOKeane.MissionControl
+PackageIdentifier: JohnOKeane.Orrery
 PackageVersion: __VERSION__
 InstallerLocale: en-US
 InstallerType: inno

@@ -1,4 +1,4 @@
-# Mission Control — Product
+# Orrery — Product
 
 The canonical product doc. What this is, who it's for, what it deliberately is
 *not*, and how we'll know it's working. Engineering/process lives in
@@ -38,7 +38,7 @@ their head.
 Context is scattered. `git status` is per-repo and per-terminal. The "why" of a
 project (prod URL, stack, the one thing you're mid-push on) lives in your head
 or a stale README. Switching projects means rebuilding that context every time.
-Mission Control makes the whole workspace legible at a glance and keeps the
+Orrery makes the whole workspace legible at a glance and keeps the
 human context attached to each repo.
 
 ## Principles (the non-negotiables)
@@ -98,7 +98,7 @@ the live tensions. Revisit these before any launch push.
 
 ### Does it sync across devices? Does it need a login?
 
-**Short answer: no, and that's deliberate — for now.** Mission Control is a
+**Short answer: no, and that's deliberate — for now.** Orrery is a
 standalone local app. It runs as your OS user on one machine, keeps its config
 in a local file (plus the optional GitHub token in the OS keychain), and has no
 account system because there is no server to log into. Open it on a second
@@ -116,8 +116,14 @@ per-machine, no login.**
 
 ### What's the name?
 
-"Mission Control" collides with Apple's window manager. It needs a rename before
-any real launch push. (Tracked: issue #12.)
+**Decided: Orrery** (v2.0.0). An orrery is a desk instrument that shows every
+planet's position at once, in one frame — which is the product in one word, and
+matches the aesthetic: a calm, precise instrument rather than a toy.
+
+It replaced "Mission Control", which collided with Apple's window manager. That
+collision was never only cosmetic: `open -a "Mission Control"` resolved to
+Apple's app, so the most common scripted launch path silently did nothing.
+"Orrery" collides with nothing, so the bug goes away by construction.
 
 ### Who beyond the solo multi-repo developer?
 

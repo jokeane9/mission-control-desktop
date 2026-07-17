@@ -2,7 +2,7 @@
 
 Read before cutting a release or making a versioning call.
 
-Mission Control is a **desktop app**, not a live service — there's no prod to
+Orrery is a **desktop app**, not a live service — there's no prod to
 blue/green or roll back. "Shipping" = tag → CI builds both platforms → GitHub
 Release → Homebrew cask bump. Users are on whatever version they last installed;
 the only rollback is "don't upgrade." So the bar is simply: **never publish a
@@ -29,7 +29,7 @@ Never version Mac and Windows independently — one tag builds both.
 - **No bump** — README/PM-doc changes that don't ship in the app
 
 The tag strips its leading `v` for artifact names (`v1.1.0` →
-`MissionControl-1.1.0.dmg`). The cask URL depends on this — don't change it.
+`Orrery-1.1.0.dmg`). The cask URL depends on this — don't change it.
 
 ---
 
@@ -41,7 +41,7 @@ The tag strips its leading `v` for artifact names (`v1.1.0` →
 4. `git tag vX.Y.Z && git push --tags`.
 5. Watch `release.yml`: `macos` + `windows` + `release` + `bump-tap` all green.
 6. Verify the three release assets exist and the DMG URL returns 200.
-7. Verify the tap cask flipped: `brew info --cask jokeane9/tap/mission-control-desktop`
+7. Verify the tap cask flipped: `brew info --cask jokeane9/tap/orrery`
    shows the new version.
 8. If `bump-tap` fails on auth (HTTP 401), the `TAP_GITHUB_TOKEN` secret is stale
    — re-set it (interactive `gh secret set`, paste at the prompt) and re-run the
