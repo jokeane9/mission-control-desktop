@@ -192,6 +192,19 @@ def collect_worklog(project_dirs, days=WORKLOG_DAYS):
     return commits
 
 
+# A Claude Code worktree lives at <repo>/.claude/worktrees/<name>.
+_WT_MARK = os.sep + ".claude" + os.sep + "worktrees" + os.sep
+
+
+def _worktree_of(cwd):
+    """The worktree root, if this path is inside one — else ''."""
+    i = cwd.find(_WT_MARK)
+    if i < 0:
+        return ""
+    tail = cwd[i + len(_WT_MARK):].split(os.sep)[0]
+    return cwd[:i + len(_WT_MARK)] + tail if tail else ""
+
+
 def _parse_transcript(path):
     """One pass over a session transcript → {"days": …, "meta": …}.
 
@@ -205,7 +218,7 @@ def _parse_transcript(path):
     metadata lines we care about are few and checked only when the filter misses.
     """
     ids = {}
-    meta = {"cwd": "", "branch": "", "start": "", "end": "", "msgs": 0}
+    meta = {"cwd": "", "branch": "", "start": "", "end": "", "msgs": 0, "wts": []}
     try:
         for line in open(path, encoding="utf-8", errors="ignore"):
             has_usage = '"usage"' in line
@@ -221,11 +234,21 @@ def _parse_transcript(path):
             if ts:
                 meta["start"] = meta["start"] or ts     # first line wins
                 meta["end"] = ts                        # last line wins
-            if not meta["cwd"] and d.get("cwd"):
-                # The FIRST cwd is the launch dir. Later ones drift as the agent
-                # cd's around — a single session was seen touching four different
-                # directories — so "a cwd" is not the same as "this session's repo".
-                meta["cwd"] = d["cwd"]
+            cwd = d.get("cwd")
+            if cwd:
+                if not meta["cwd"]:
+                    # First cwd — used only to attribute the session to a repo,
+                    # which is prefix-matched, so drift can't change the answer.
+                    meta["cwd"] = cwd
+                # …but worktrees are collected from EVERY cwd, not just the first.
+                # A session's cwd migrates: one real transcript starts in a
+                # worktree at 05:47 and ends in the parent repo at 23:53. Reading
+                # only the first cwd would make catching a worktree depend on line
+                # ordering — it happened to work there, and would silently miss
+                # any session that entered a worktree after its opening line.
+                wt = _worktree_of(cwd)
+                if wt and wt not in meta["wts"]:
+                    meta["wts"].append(wt)
             if not meta["branch"] and d.get("gitBranch"):
                 meta["branch"] = d["gitBranch"]
             if d.get("type") in ("user", "assistant"):
@@ -254,7 +277,7 @@ def _parse_transcript(path):
     return {"days": days, "meta": meta}
 
 
-_CACHE_V = 2        # v2 adds per-session `meta` alongside `days` (Sessions view)
+_CACHE_V = 3        # v2 added per-session `meta`; v3 added meta["wts"]
 
 
 def _transcripts(cache_path, claude_dir=CLAUDE_DIR):
@@ -833,7 +856,6 @@ def worktrees_html(worktrees):
 # --------------------------------------------------------------------------- #
 SESSIONS_DAYS = 30              # history window for the view
 SESSION_ACTIVE_MIN = 30         # last activity within this → still live
-_WT_MARK = os.sep + ".claude" + os.sep + "worktrees" + os.sep
 
 
 def _iso_local(ts):
@@ -863,15 +885,6 @@ def _match_repo(cwd, project_dirs):
     return best_name
 
 
-def _worktree_of(cwd):
-    """The worktree root, if this session ran inside one — else ''."""
-    i = cwd.find(_WT_MARK)
-    if i < 0:
-        return ""
-    tail = cwd[i + len(_WT_MARK):].split(os.sep)[0]
-    return cwd[:i + len(_WT_MARK)] + tail if tail else ""
-
-
 def collect_sessions(project_dirs, cache_path, claude_dir=CLAUDE_DIR,
                      days=SESSIONS_DAYS):
     """[{id, repo, cwd, branch, started, ended, age_min, msgs, tokens,
@@ -898,7 +911,12 @@ def collect_sessions(project_dirs, cache_path, claude_dir=CLAUDE_DIR,
         start = _iso_local(meta.get("start"))
         if not end or end < cutoff:
             continue
-        wt = _worktree_of(cwd)
+        # Every worktree this session touched, not just the one it opened in.
+        # A live one wins: that's the ghost still on disk, and the only one
+        # that's actionable.
+        wts = [os.path.realpath(w) for w in (meta.get("wts") or [])]
+        live = [w for w in wts if os.path.isdir(w)]
+        wt = (live or wts or [""])[0]
         tokens = [0, 0, 0, 0]
         for v in (e.get("days") or {}).values():
             for i in range(4):
@@ -919,7 +937,7 @@ def collect_sessions(project_dirs, cache_path, claude_dir=CLAUDE_DIR,
             "worktree": wt,
             # A worktree still on disk after its session ended is the ghost the
             # Worktrees view hunts — this is the other end of that story.
-            "worktree_live": bool(wt) and os.path.isdir(wt),
+            "worktree_live": bool(live),
             "active": age_min <= SESSION_ACTIVE_MIN,
         })
     out.sort(key=lambda s: s["age_min"])

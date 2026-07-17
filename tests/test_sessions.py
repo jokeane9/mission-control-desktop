@@ -164,6 +164,56 @@ def test_worktree_of():
     assert V._worktree_of("/r/app/src") == ""
 
 
+def test_worktree_entered_after_the_first_cwd_is_still_caught():
+    """A session's cwd MIGRATES: a real transcript was seen starting in a
+    worktree at 05:47 and ending in the parent repo at 23:53. So reading only
+    the first cwd makes catching a worktree depend on line ordering — it would
+    silently miss any session that entered one after its opening line. Worktrees
+    are collected from every cwd, not just the first.
+    """
+    base, claude, repo, cache = workspace()
+    wt = os.path.join(repo, ".claude", "worktrees", "late-arrival")
+    os.makedirs(wt)
+    try:
+        d = os.path.join(claude, "projects", "-app"); os.makedirs(d)
+        with open(os.path.join(d, "aaaaaaaa-9.jsonl"), "w") as f:
+            # opens in the PARENT — the old first-cwd-only logic stopped here
+            f.write(json.dumps({"type": "user", "cwd": repo, "gitBranch": "main",
+                                "timestamp": ts(3)}) + "\n")
+            # and only later enters the worktree
+            f.write(json.dumps({"type": "assistant", "cwd": wt,
+                                "timestamp": ts(2)}) + "\n")
+        s = V.collect_sessions([("app", repo)], cache, claude_dir=claude)
+        assert len(s) == 1
+        assert s[0]["repo"] == "app"                       # attribution unchanged
+        assert s[0]["worktree"] == os.path.realpath(wt), "missed a late worktree"
+        assert s[0]["worktree_live"] is True
+        assert "left a worktree" in V.sessions_html(s)
+    finally:
+        shutil.rmtree(base, ignore_errors=True)
+
+
+def test_live_worktree_wins_over_a_cleaned_one():
+    """A session may touch several. The one still on disk is the only actionable
+    one, so it's the one reported."""
+    base, claude, repo, cache = workspace()
+    gone = os.path.join(repo, ".claude", "worktrees", "cleaned-up")
+    live = os.path.join(repo, ".claude", "worktrees", "still-here")
+    os.makedirs(live)
+    try:
+        d = os.path.join(claude, "projects", "-app"); os.makedirs(d)
+        with open(os.path.join(d, "bbbbbbbb-9.jsonl"), "w") as f:
+            f.write(json.dumps({"type": "user", "cwd": gone,
+                                "timestamp": ts(3)}) + "\n")
+            f.write(json.dumps({"type": "assistant", "cwd": live,
+                                "timestamp": ts(2)}) + "\n")
+        s = V.collect_sessions([("app", repo)], cache, claude_dir=claude)
+        assert s[0]["worktree"] == os.path.realpath(live)
+        assert s[0]["worktree_live"] is True
+    finally:
+        shutil.rmtree(base, ignore_errors=True)
+
+
 # --- liveness + window ------------------------------------------------------ #
 def test_active_vs_stale():
     base, claude, repo, cache = workspace()
