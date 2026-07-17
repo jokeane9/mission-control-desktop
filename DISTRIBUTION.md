@@ -190,6 +190,28 @@ In `jokeane9/homebrew-tap`, one commit:
    resolves, and `brew info --cask jokeane9/tap/mission-control-desktop` follows
    the rename rather than 404-ing.
 
+**Tap trust invalidates on rename.** Homebrew trusts casks by *token*, so anyone
+with `HOMEBREW_REQUIRE_TAP_TRUST` set has `jokeane9/tap/mission-control-desktop`
+in their `trust.json` and will hit `Refusing to load cask ... from untrusted tap`
+after the rename. One command fixes it, and it belongs in the release notes:
+
+```sh
+brew trust --cask jokeane9/tap/orrery
+```
+
+Most users never set that variable and won't see it — but it's silent-looking
+friction for the ones who do, and it's a `brew` behaviour, not a bug in the cask.
+
+**The `url` template must be right before you tag.** `bump-tap` only rewrites
+`version` and `sha256` — it never touches `url`. So the cask has to already name
+the post-rename artifacts (`Orrery-<version>.dmg`, renamed repo). The tap cask
+deliberately keeps `version` at the last Mission-Control-era release rather than
+pre-setting `2.0.0`: existing installs then see "no upgrade" (a harmless no-op)
+instead of an upgrade that 404s. The trade is a short window where a *new*
+`brew install` 404s, because the url names artifacts that don't exist until
+v2.0.0 publishes — so **tag promptly** once the tap lands, and **rename the
+GitHub repo first**, since the url points at `jokeane9/orrery`.
+
 winget is the one path that **cannot** follow a rename: the identifier is the
 package identity, so `JohnOKeane.Orrery` is a new submission and
 `JohnOKeane.MissionControl` should be deprecated. Existing winget users must

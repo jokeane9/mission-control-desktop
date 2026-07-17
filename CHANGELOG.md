@@ -34,10 +34,17 @@ platforms.
   retire them. New name wins where both exist.
 
 ### Upgrading
-- **Homebrew:** `brew upgrade` follows the rename automatically. On macOS the
-  first launch of any new unsigned version needs one "Open Anyway" in System
-  Settings → Privacy & Security (see the README) — that's notarization, not this
-  rename.
+- **Homebrew:** `brew upgrade` follows the rename automatically (the tap carries
+  a `cask_renames.json`). On macOS the first launch of any new unsigned version
+  needs one "Open Anyway" in System Settings → Privacy & Security (see the
+  README) — that's notarization, not this rename.
+- **If you set `HOMEBREW_REQUIRE_TAP_TRUST`,** Homebrew trusts casks by *token*,
+  so the rename invalidates your existing entry and the cask is refused until you
+  re-trust it once:
+  ```sh
+  brew trust --cask jokeane9/tap/orrery
+  ```
+  Most people don't set that variable and won't see this.
 - **Windows:** the installer upgrades in place; the Start-menu entry is renamed.
 - **winget:** the package identifier changed, so `winget upgrade` won't cross the
   rename — install `JohnOKeane.Orrery` once.
