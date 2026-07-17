@@ -14,6 +14,8 @@ Views:
   Worktrees — every extra checkout across the repos, oldest first, each with a
              safe-to-remove verdict. Surfaces the ghost worktrees an interrupted
              Claude Code session leaves under .claude/worktrees/.
+  Sessions — Claude Code sessions per repo: live/idle, branch, span, tokens, and
+             whether one left a worktree behind. Metadata only, never content.
   PM       — a local, always-there admin scratchpad: one free-text notes file
              the desktop app autosaves. Not synced; lives in the data dir.
 """
@@ -191,25 +193,50 @@ def collect_worklog(project_dirs, days=WORKLOG_DAYS):
 
 
 def _parse_transcript(path):
-    """Per-day usage totals from one Claude Code session transcript.
-    Cheap pre-filter (most lines carry no usage), then dedupe by message id —
-    streaming updates repeat a message's usage on several lines; keep the last."""
+    """One pass over a session transcript → {"days": …, "meta": …}.
+
+    days: per-day usage totals. Deduped by message id — streaming updates repeat
+    a message's usage on several lines; keep the last.
+    meta: what the Sessions view needs — launch cwd, branch, span, message count.
+
+    Both come from ONE walk on purpose: the transcripts run to hundreds of MB,
+    so a second pass to collect session metadata would double the cost of every
+    cold render. The `"usage"` pre-filter still skips most lines cheaply; the
+    metadata lines we care about are few and checked only when the filter misses.
+    """
     ids = {}
+    meta = {"cwd": "", "branch": "", "start": "", "end": "", "msgs": 0}
     try:
         for line in open(path, encoding="utf-8", errors="ignore"):
-            if '"usage"' not in line:      # cheap pre-filter; most lines skip here
+            has_usage = '"usage"' in line
+            # Fast path: skip lines that carry neither usage nor anything meta
+            # needs. Substring checks are far cheaper than json.loads per line.
+            if not has_usage and '"cwd"' not in line and '"timestamp"' not in line:
                 continue
             try:
                 d = json.loads(line)
             except Exception:
                 continue
-            m = d.get("message") or {}
-            u = m.get("usage")
             ts = d.get("timestamp")
-            if isinstance(u, dict) and ts:
-                ids[m.get("id") or d.get("requestId") or ts] = (ts, u)
+            if ts:
+                meta["start"] = meta["start"] or ts     # first line wins
+                meta["end"] = ts                        # last line wins
+            if not meta["cwd"] and d.get("cwd"):
+                # The FIRST cwd is the launch dir. Later ones drift as the agent
+                # cd's around — a single session was seen touching four different
+                # directories — so "a cwd" is not the same as "this session's repo".
+                meta["cwd"] = d["cwd"]
+            if not meta["branch"] and d.get("gitBranch"):
+                meta["branch"] = d["gitBranch"]
+            if d.get("type") in ("user", "assistant"):
+                meta["msgs"] += 1
+            if has_usage:
+                m = d.get("message") or {}
+                u = m.get("usage")
+                if isinstance(u, dict) and ts:
+                    ids[m.get("id") or d.get("requestId") or ts] = (ts, u)
     except OSError:
-        return {}
+        return {"days": {}, "meta": meta}
     days = {}
     for ts, u in ids.values():
         try:
@@ -224,21 +251,27 @@ def _parse_transcript(path):
                 t[i] += int(u.get(k) or 0)
             except (TypeError, ValueError):
                 pass
-    return days
+    return {"days": days, "meta": meta}
 
 
-def collect_tokens(cache_path, claude_dir=CLAUDE_DIR, days=WORKLOG_DAYS):
-    """{'YYYY-MM-DD': [input, output, cache_write, cache_read], …} per local
-    day, summed across every Claude Code session transcript. The transcripts
-    are hundreds of MB, so results are cached per file keyed on (size, mtime)
-    — a regen reparses only transcripts that changed since the last one."""
+_CACHE_V = 2        # v2 adds per-session `meta` alongside `days` (Sessions view)
+
+
+def _transcripts(cache_path, claude_dir=CLAUDE_DIR):
+    """{path: {size, mtime, days, meta}} for every session transcript, cached.
+
+    The transcripts run to hundreds of MB, so results are cached per file keyed
+    on (size, mtime) — a regen reparses only what changed. Shared by the Work Log
+    (days) and Sessions (meta): one parse feeds both, and neither can drift from
+    the other. Bumping _CACHE_V forces one full reparse; it's a cache, so that
+    costs time, never data."""
     files = sorted(glob.glob(os.path.join(claude_dir, "projects", "*", "*.jsonl")))
     try:
         cache = json.load(open(cache_path, encoding="utf-8"))
-        if cache.get("v") != 1:
+        if cache.get("v") != _CACHE_V:
             raise ValueError
     except Exception:
-        cache = {"v": 1, "files": {}}
+        cache = {"v": _CACHE_V, "files": {}}
     entries, changed = {}, False
     for f in files:
         try:
@@ -249,16 +282,24 @@ def collect_tokens(cache_path, claude_dir=CLAUDE_DIR, days=WORKLOG_DAYS):
         if c and c.get("size") == st.st_size and c.get("mtime") == st.st_mtime:
             entries[f] = c
         else:
+            parsed = _parse_transcript(f)
             entries[f] = {"size": st.st_size, "mtime": st.st_mtime,
-                          "days": _parse_transcript(f)}
+                          "days": parsed["days"], "meta": parsed["meta"]}
             changed = True
     if changed or set(entries) != set(cache["files"]):
         try:
             tmp = cache_path + ".tmp"
-            json.dump({"v": 1, "files": entries}, open(tmp, "w"))
+            json.dump({"v": _CACHE_V, "files": entries}, open(tmp, "w"))
             os.replace(tmp, cache_path)
         except OSError:
             pass                       # cache is an optimization, never a failure
+    return entries
+
+
+def collect_tokens(cache_path, claude_dir=CLAUDE_DIR, days=WORKLOG_DAYS):
+    """{'YYYY-MM-DD': [input, output, cache_write, cache_read], …} per local
+    day, summed across every Claude Code session transcript."""
+    entries = _transcripts(cache_path, claude_dir)
     cutoff = (datetime.date.today() - datetime.timedelta(days=days)).isoformat()
     total = {}
     for e in entries.values():
@@ -773,6 +814,192 @@ def worktrees_html(worktrees):
   {"".join(rows)}
   <div class="wthint">Remove a safe one: <code>{cmd}</code></div>
 </div>''')
+    return "".join(out)
+
+
+# --------------------------------------------------------------------------- #
+# Sessions — what your agents are doing, and what they left behind.
+#
+# Worktrees answers "what did my agent leave on disk". This answers "what was it
+# doing, and where" — and joins the two: an abandoned worktree and the session
+# that stranded it are one story told from both ends. Claude Code only removes a
+# worktree on a clean exit, so an interrupted session leaves a folder no
+# `git status` mentions and a transcript nobody reads. Here they meet.
+#
+# PRIVACY, non-negotiable: metadata only — never prompts, never responses, never
+# titles. Timings, counts, paths, token totals. The transcripts are the most
+# sensitive thing on the machine; this view reads them and must never surface
+# their content, even locally.
+# --------------------------------------------------------------------------- #
+SESSIONS_DAYS = 30              # history window for the view
+SESSION_ACTIVE_MIN = 30         # last activity within this → still live
+_WT_MARK = os.sep + ".claude" + os.sep + "worktrees" + os.sep
+
+
+def _iso_local(ts):
+    """Transcript timestamp (UTC ISO, 'Z') → local datetime. None if unparseable."""
+    try:
+        return (datetime.datetime.fromisoformat(ts.replace("Z", "+00:00"))
+                .astimezone().replace(tzinfo=None))
+    except (ValueError, AttributeError):
+        return None
+
+
+def _match_repo(cwd, project_dirs):
+    """Which dashboard project a session's launch dir belongs to — longest path
+    prefix wins.
+
+    Prefix-matching rather than un-mangling `~/.claude/projects/<dir>`, because
+    that mangling is LOSSY: both `/` and `.` collapse to `-`, so
+    `killdate.dev` and `killdate/dev` produce the same directory name. Prefix
+    matching also gets worktrees right for free — a session inside
+    `killdate.dev/.claude/worktrees/x` still belongs to killdate.dev.
+    """
+    best_name, best_len = "", -1
+    for name, p in project_dirs:
+        root = os.path.realpath(os.path.expanduser(p))
+        if (cwd == root or cwd.startswith(root + os.sep)) and len(root) > best_len:
+            best_name, best_len = name, len(root)
+    return best_name
+
+
+def _worktree_of(cwd):
+    """The worktree root, if this session ran inside one — else ''."""
+    i = cwd.find(_WT_MARK)
+    if i < 0:
+        return ""
+    tail = cwd[i + len(_WT_MARK):].split(os.sep)[0]
+    return cwd[:i + len(_WT_MARK)] + tail if tail else ""
+
+
+def collect_sessions(project_dirs, cache_path, claude_dir=CLAUDE_DIR,
+                     days=SESSIONS_DAYS):
+    """[{id, repo, cwd, branch, started, ended, age_min, msgs, tokens,
+    worktree, worktree_live, active}, …] — Claude Code sessions in the
+    dashboard's repos, newest first.
+
+    Scoped to `project_dirs` like Worktrees: a session in a repo the dashboard
+    doesn't know about isn't part of this workspace's story.
+    """
+    entries = _transcripts(cache_path, claude_dir)
+    now = datetime.datetime.now()
+    cutoff = now - datetime.timedelta(days=days)
+    out = []
+    for path, e in entries.items():
+        meta = e.get("meta") or {}
+        cwd = meta.get("cwd") or ""
+        if not cwd:
+            continue
+        cwd = os.path.realpath(cwd)
+        repo = _match_repo(cwd, project_dirs)
+        if not repo:                        # not a dashboard repo — out of scope
+            continue
+        end = _iso_local(meta.get("end"))
+        start = _iso_local(meta.get("start"))
+        if not end or end < cutoff:
+            continue
+        wt = _worktree_of(cwd)
+        tokens = [0, 0, 0, 0]
+        for v in (e.get("days") or {}).values():
+            for i in range(4):
+                tokens[i] += v[i]
+        age_min = max(0, int((now - end).total_seconds() / 60))
+        out.append({
+            "id": os.path.basename(path)[:8],
+            "repo": repo,
+            "cwd": cwd,
+            "branch": meta.get("branch") or "",
+            "started": start.isoformat(timespec="minutes") if start else "",
+            "ended": end.isoformat(timespec="minutes"),
+            "age_min": age_min,
+            "mins": (int((end - start).total_seconds() / 60)
+                     if start and end >= start else 0),
+            "msgs": meta.get("msgs") or 0,
+            "tokens": sum(tokens),
+            "worktree": wt,
+            # A worktree still on disk after its session ended is the ghost the
+            # Worktrees view hunts — this is the other end of that story.
+            "worktree_live": bool(wt) and os.path.isdir(wt),
+            "active": age_min <= SESSION_ACTIVE_MIN,
+        })
+    out.sort(key=lambda s: s["age_min"])
+    return out
+
+
+def _ago(mins):
+    if mins < 60:
+        return f"{mins}m ago"
+    if mins < 60 * 24:
+        return f"{mins // 60}h ago"
+    return f"{mins // (60 * 24)}d ago"
+
+
+def _knum(n):
+    if n >= 1_000_000:
+        return f"{n / 1_000_000:.1f}M"
+    if n >= 1_000:
+        return f"{n / 1_000:.0f}k"
+    return str(n)
+
+
+def sessions_html(sessions):
+    """The Sessions view body: one row per session, newest first, grouped by repo.
+    Metadata only — no prompt or response content ever reaches this page."""
+    esc = html.escape
+    live = [s for s in sessions if s["active"]]
+    ghosts = [s for s in sessions if s["worktree_live"] and not s["active"]]
+    sub = (f'{len(sessions)} session{"s" if len(sessions) != 1 else ""} · '
+           f'last {SESSIONS_DAYS} days'
+           + (f' · {len(live)} live' if live else "")
+           + (f' · {len(ghosts)} left a worktree behind' if ghosts else ""))
+    out = [f'''<div class="dhead"><span class="dname">Sessions</span>
+    <span class="dthesis">{esc(sub) if sessions else "no recent sessions"}</span></div>''']
+    if not sessions:
+        out.append(
+            '<div class="vempty">No Claude Code sessions in the last '
+            f'{SESSIONS_DAYS} days for these repos.<br><span class="wtdim">'
+            'Sessions are read from your local <code>~/.claude</code> transcripts '
+            '— timings and counts only, never prompts.</span></div>')
+        return "".join(out)
+
+    by_repo = {}
+    for s in sessions:
+        by_repo.setdefault(s["repo"], []).append(s)
+
+    for repo, rows in by_repo.items():
+        body = []
+        for s in rows:
+            dot = ('<span class="dot green"></span>' if s["active"]
+                   else '<span class="dot dim"></span>')
+            branch = (f'<span class="wtbranch">{esc(s["branch"])}</span>'
+                      if s["branch"] else "")
+            chips = []
+            if s["msgs"]:
+                chips.append(f'<span class="wtchip">{s["msgs"]} msgs</span>')
+            if s["tokens"]:
+                chips.append(f'<span class="wtchip">{_knum(s["tokens"])} tokens</span>')
+            if s["mins"]:
+                chips.append(f'<span class="wtchip">{_ago(s["mins"]).replace(" ago", "")}</span>')
+            # The join that makes this view worth building.
+            if s["worktree_live"]:
+                chips.append('<span class="wtchip amber" title="' +
+                             esc(s["worktree"], quote=True) +
+                             '">left a worktree</span>')
+            state = ('<span class="wtverdict ok">live</span>' if s["active"]
+                     else f'<span class="wtage">{esc(_ago(s["age_min"]))}</span>')
+            body.append(f'''<div class="wtrow">
+  <div class="wtmain">{dot}<span class="wtname">{esc(s["id"])}</span>{branch}{state}</div>
+  <div class="wtpath" title="{esc(s["cwd"], quote=True)}">{esc(s["cwd"])}</div>
+  <div class="wtchips">{"".join(chips)}</div>
+</div>''')
+        out.append(f'''<div class="sgroup">
+  <div class="sgtitle">{esc(repo)}<span class="wtcount">{len(rows)}</span></div>
+  {"".join(body)}
+</div>''')
+    if ghosts:
+        out.append('<div class="wthint">Sessions marked <b>left a worktree</b> ended '
+                   'without cleaning up — the folder is still on disk. See the '
+                   '<b>worktrees</b> tab for whether it is safe to remove.</div>')
     return "".join(out)
 
 

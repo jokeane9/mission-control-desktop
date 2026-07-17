@@ -544,6 +544,11 @@ def main():
              views.roadmaps_html(views.collect_roadmaps(project_dirs)))
     worktrees = views.collect_worktrees(project_dirs)
     top_view("worktrees", "worktrees", views.worktrees_html(worktrees))
+    # Same token_cache.json the Work Log uses: one parse of the transcripts feeds
+    # both views, so the second one is nearly free.
+    top_view("sessions", "sessions",
+             views.sessions_html(views.collect_sessions(
+                 project_dirs, os.path.join(DATA, "token_cache.json"))))
     top_view("pm", "pm", views.notes_html(views.load_notes(NOTES)))
 
     now_dt = datetime.datetime.now()

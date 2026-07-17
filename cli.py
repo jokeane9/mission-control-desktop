@@ -3,6 +3,7 @@
 
     orrery status              what needs you, across every repo
     orrery worktrees           every extra checkout + safe-to-remove verdict
+    orrery sessions            Claude Code sessions: live, recent, ghosts
     orrery standup             your recent commits, grouped by day
     orrery skills              the Claude Code skills catalog
     orrery <cmd> --json        the same data, pipeable
@@ -221,6 +222,46 @@ def cmd_standup(args):
 
 
 # --------------------------------------------------------------------------- #
+# sessions — what your agents are doing
+# --------------------------------------------------------------------------- #
+def cmd_sessions(args):
+    cfg, cache = load(args)
+    projects, _ = generate.workspace(cfg, cache)
+    sessions = views.collect_sessions(
+        project_dirs(projects), os.path.join(generate.DATA, "token_cache.json"),
+        days=args.days)
+
+    def render(_):
+        if not sessions:
+            print(dim(f"no Claude Code sessions in the last {args.days} days"))
+            return
+        live = [s for s in sessions if s["active"]]
+        ghosts = [s for s in sessions if s["worktree_live"] and not s["active"]]
+        print(f'{len(sessions)} session{"s" if len(sessions) != 1 else ""}'
+              + (green(f" · {len(live)} live") if live else "")
+              + (amber(f" · {len(ghosts)} left a worktree behind") if ghosts else ""))
+        print()
+        cur = None
+        for s in sessions:
+            if s["repo"] != cur:
+                cur = s["repo"]
+                print(bold(cur))
+            mark = green("●") if s["active"] else dim("○")
+            when = green("live") if s["active"] else views._ago(s["age_min"])
+            bits = [f'{s["msgs"]} msgs', f'{views._knum(s["tokens"])} tok']
+            if s["worktree_live"]:
+                bits.append(amber("left a worktree"))
+            print(f'  {mark} {s["id"]}  {dim((s["branch"] or "—")[:18].ljust(18))} '
+                  f'{when.rjust(8)}  {dim(" · ".join(bits))}')
+        if ghosts:
+            print(dim("\nSessions that left a worktree ended without cleaning up — "
+                      "see `orrery worktrees`."))
+
+    out(sessions, args, render)
+    return 0
+
+
+# --------------------------------------------------------------------------- #
 # skills — the catalog
 # --------------------------------------------------------------------------- #
 def cmd_skills(args):
@@ -284,6 +325,12 @@ def build_parser():
                        help="your recent commits, by day")
     d.add_argument("--since", choices=sorted(_SPANS), default="week")
     d.set_defaults(fn=cmd_standup)
+
+    e = sub.add_parser("sessions", parents=[common],
+                       help="Claude Code sessions: live, recent, and what they left")
+    e.add_argument("--days", type=int, default=views.SESSIONS_DAYS,
+                   help=f"history window (default {views.SESSIONS_DAYS})")
+    e.set_defaults(fn=cmd_sessions)
 
     k = sub.add_parser("skills", parents=[common],
                        help="the Claude Code skills catalog")
