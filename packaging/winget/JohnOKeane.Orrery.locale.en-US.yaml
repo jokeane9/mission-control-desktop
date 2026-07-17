@@ -1,20 +1,20 @@
 # yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.6.0.schema.json
 # Template: __VERSION__ is filled by stamp.sh <version> (README.md).
-PackageIdentifier: JohnOKeane.MissionControl
+PackageIdentifier: JohnOKeane.Orrery
 PackageVersion: __VERSION__
 PackageLocale: en-US
 Publisher: John O'Keane
 PublisherUrl: https://github.com/jokeane9
-PublisherSupportUrl: https://github.com/jokeane9/mission-control-desktop/issues
+PublisherSupportUrl: https://github.com/jokeane9/orrery/issues
 Author: John O'Keane
-PackageName: Mission Control
-PackageUrl: https://github.com/jokeane9/mission-control-desktop
+PackageName: Orrery
+PackageUrl: https://github.com/jokeane9/orrery
 License: MIT
-LicenseUrl: https://github.com/jokeane9/mission-control-desktop/blob/main/LICENSE
+LicenseUrl: https://github.com/jokeane9/orrery/blob/main/LICENSE
 Copyright: Copyright (c) 2026 John O'Keane
 ShortDescription: One window showing the live git state of every project you work on.
 Description: >-
-  Mission Control is a local, single-window dashboard for developers juggling
+  Orrery is a local, single-window dashboard for developers juggling
   many git repositories. Each project shows its live git state — branch,
   uncommitted, unmerged and unpushed counts — alongside the human context no
   tool can derive: what it is, where prod lives, what you're pushing on.
@@ -22,13 +22,13 @@ Description: >-
   work log of your commits over time, and every project's roadmap in one place.
   Git data is read live per repo; nothing leaves your machine — no server, no
   account, no telemetry. Free and open source.
-Moniker: mission-control
+Moniker: orrery
 Tags:
   - git
   - dashboard
   - developer-tools
   - productivity
   - devtools
-ReleaseNotesUrl: https://github.com/jokeane9/mission-control-desktop/releases/tag/v__VERSION__
+ReleaseNotesUrl: https://github.com/jokeane9/orrery/releases/tag/v__VERSION__
 ManifestType: defaultLocale
 ManifestVersion: 1.6.0

@@ -1,9 +1,9 @@
 #!/bin/bash
-# Build "Mission Control.app" — a native Dock app wrapping app.py (pywebview).
+# Build "Orrery.app" — a native Dock app wrapping app.py (pywebview).
 # Idempotent: rebuilds the bundle + icon from source each run.
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
-APP="$HERE/Mission Control.app"
+APP="$HERE/Orrery.app"
 PY="$HERE/.venv/bin/python"
 
 # --- icon: icon_1024.png -> icon.icns ---
@@ -31,9 +31,9 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <key>CFBundleName</key><string>Mission Control</string>
-    <key>CFBundleDisplayName</key><string>Mission Control</string>
-    <key>CFBundleIdentifier</key><string>com.keane.mission-control.app</string>
+    <key>CFBundleName</key><string>Orrery</string>
+    <key>CFBundleDisplayName</key><string>Orrery</string>
+    <key>CFBundleIdentifier</key><string>com.keane.orrery.app</string>
     <key>CFBundleExecutable</key><string>launcher</string>
     <key>CFBundleIconFile</key><string>icon</string>
     <key>CFBundlePackageType</key><string>APPL</string>

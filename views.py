@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Mission Control — top-level dashboard views beyond the project cards.
+"""Orrery — top-level dashboard views beyond the project cards.
 Stdlib only, like generate.py. Each view is a collect_*() (pure data, testable)
 plus a *_html() renderer that generate.py drops into the page template.
 

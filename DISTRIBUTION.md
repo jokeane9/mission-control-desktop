@@ -1,4 +1,4 @@
-# Distributing Mission Control (blog / GitHub releases, outside the app stores)
+# Distributing Orrery (blog / GitHub releases, outside the app stores)
 
 State of the rules as of July 2026, and exactly what this repo already does
 about each one. Short version: **App Store review guidelines do not apply to
@@ -17,7 +17,7 @@ each choice costs the user in friction:
 | Windows | **SignPath Foundation** (free OSS code signing) | None — a properly signed installer, clears SmartScreen. |
 
 - **Windows is fully solved for free.** SignPath Foundation signs open-source
-  projects at no cost. Mission Control qualifies (OSI license, you own the
+  projects at no cost. Orrery qualifies (OSI license, you own the
   repo, actively maintained). The publisher name shows as "SignPath
   Foundation" rather than you — the only trade-off. Apply at
   <https://signpath.org/terms> and add the signing step to the release
@@ -111,14 +111,14 @@ ship unsigned until you finish enrollment — then it activates automatically.
 1. **Apply to SignPath Foundation** (free OSS signing) at
    <https://signpath.org/terms>. Once approved, in the SignPath console create a
    **project** and a **signing policy**.
-2. **Match the slugs.** The workflow uses `project-slug: mission-control-desktop`
+2. **Match the slugs.** The workflow uses `project-slug: orrery`
    and `signing-policy-slug: release-signing`. Either name your SignPath project
    and policy those exact slugs, or edit the two lines in the `Sign installer
    with SignPath` step to match what you created.
-3. **Add two secrets** to `jokeane9/mission-control-desktop`:
+3. **Add two secrets** to `jokeane9/orrery`:
    ```sh
-   gh secret set SIGNPATH_API_TOKEN --repo jokeane9/mission-control-desktop   # from SignPath console
-   gh secret set SIGNPATH_ORG_ID    --repo jokeane9/mission-control-desktop   # your SignPath organization id (GUID)
+   gh secret set SIGNPATH_API_TOKEN --repo jokeane9/orrery   # from SignPath console
+   gh secret set SIGNPATH_ORG_ID    --repo jokeane9/orrery   # your SignPath organization id (GUID)
    ```
 4. **Tag a release.** The job uploads the unsigned installer, submits it to
    SignPath, and overwrites `dist/*-setup.exe` in place with the signed file
@@ -166,6 +166,58 @@ The `bump-tap` job in the workflow downloads the freshly-released DMG, computes
 its `sha256`, and pushes the new `version` + checksum into the tap's cask — so
 `brew upgrade` picks up every release with no manual step.
 
+### The v2.0.0 rename: do the tap FIRST
+
+**This is a hard prerequisite, not a cleanup step.** `bump-tap` edits
+`Casks/orrery.rb` in `jokeane9/homebrew-tap`. That file does not exist until you
+make it — so tagging `v2.0.0` before the tap is ready fails the job, and every
+existing `brew upgrade` silently stops finding the app.
+
+In `jokeane9/homebrew-tap`, one commit:
+
+1. `git mv Casks/mission-control-desktop.rb Casks/orrery.rb`, then sync its
+   contents from [`packaging/homebrew/orrery.rb`](packaging/homebrew/orrery.rb)
+   (new token, `Orrery.app`, the `Orrery-<version>.dmg` URL, both zap paths).
+2. Add `cask_renames.json` at the tap root:
+   ```json
+   { "mission-control-desktop": "orrery" }
+   ```
+   This is what makes `brew upgrade` follow the rename. Without it, pre-2.0
+   installs are stranded on 1.7.0 forever with no error — they simply never see
+   another update. Homebrew uninstalls the old artifacts from the recorded
+   receipt first, so users don't end up with both apps.
+3. Verify before tagging: `brew update && brew info --cask jokeane9/tap/orrery`
+   resolves, and `brew info --cask jokeane9/tap/mission-control-desktop` follows
+   the rename rather than 404-ing.
+
+**Tap trust invalidates on rename.** Homebrew trusts casks by *token*, so anyone
+with `HOMEBREW_REQUIRE_TAP_TRUST` set has `jokeane9/tap/mission-control-desktop`
+in their `trust.json` and will hit `Refusing to load cask ... from untrusted tap`
+after the rename. One command fixes it, and it belongs in the release notes:
+
+```sh
+brew trust --cask jokeane9/tap/orrery
+```
+
+Most users never set that variable and won't see it — but it's silent-looking
+friction for the ones who do, and it's a `brew` behaviour, not a bug in the cask.
+
+**The `url` template must be right before you tag.** `bump-tap` only rewrites
+`version` and `sha256` — it never touches `url`. So the cask has to already name
+the post-rename artifacts (`Orrery-<version>.dmg`, renamed repo). The tap cask
+deliberately keeps `version` at the last Mission-Control-era release rather than
+pre-setting `2.0.0`: existing installs then see "no upgrade" (a harmless no-op)
+instead of an upgrade that 404s. The trade is a short window where a *new*
+`brew install` 404s, because the url names artifacts that don't exist until
+v2.0.0 publishes — so **tag promptly** once the tap lands, and **rename the
+GitHub repo first**, since the url points at `jokeane9/orrery`.
+
+winget is the one path that **cannot** follow a rename: the identifier is the
+package identity, so `JohnOKeane.Orrery` is a new submission and
+`JohnOKeane.MissionControl` should be deprecated. Existing winget users must
+install once by hand. Say so in the release notes rather than letting them find
+out.
+
 ### Homebrew tap auto-bump: the one required secret
 
 `bump-tap` pushes to a **different** repo (`jokeane9/homebrew-tap`), which the
@@ -176,7 +228,7 @@ default `GITHUB_TOKEN` can't write to. Give it a token once:
    `jokeane9/homebrew-tap` → Permissions → Contents: **Read and write**.
 2. Add it to this repo as a secret named `TAP_GITHUB_TOKEN`:
    ```sh
-   gh secret set TAP_GITHUB_TOKEN --repo jokeane9/mission-control-desktop
+   gh secret set TAP_GITHUB_TOKEN --repo jokeane9/orrery
    # (paste the token when prompted — it never touches the repo)
    ```
 

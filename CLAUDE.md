@@ -1,4 +1,4 @@
-# Mission Control — Claude Context
+# Orrery — Claude Context
 
 The one file to read first. What this is, how it's built, how it ships, and
 where the rest of the truth lives.
@@ -7,7 +7,7 @@ where the rest of the truth lives.
 
 ## What it is
 
-Mission Control is a local, single-window dashboard that shows every one of
+Orrery is a local, single-window dashboard that shows every one of
 your git projects' live state — branch, uncommitted/unmerged/unpushed counts —
 alongside the human facts no tool can derive (what the project is, where prod
 lives, what you're pushing on). Git data is read live per repo; the human facts
@@ -47,8 +47,8 @@ project. Never version the two platforms independently.
   build seeds the user's config from it.
 - From source: config + `index.html` sit next to the scripts.
 - Installed: they live in the per-user data dir
-  (`~/Library/Application Support/Mission Control` on macOS,
-  `%APPDATA%\Mission Control` on Windows) because the signed bundle is
+  (`~/Library/Application Support/Orrery` on macOS,
+  `%APPDATA%\Orrery` on Windows) because the signed bundle is
   read-only. See `generate.py:_data_dir()`.
 
 ## Build & run
@@ -75,7 +75,7 @@ publishes a GitHub Release with all three artifacts → the `bump-tap` job
 updates the Homebrew cask in `jokeane9/homebrew-tap` (via the Contents REST
 API, using the `TAP_GITHUB_TOKEN` secret). `brew upgrade` picks it up.
 
-Artifact naming strips the leading `v` (`v1.2.0` → `MissionControl-1.2.0.dmg`)
+Artifact naming strips the leading `v` (`v1.2.0` → `Orrery-1.2.0.dmg`)
 so the cask URL resolves — don't reintroduce the `v`.
 
 ## Distribution status
@@ -88,9 +88,9 @@ adding secrets.
 
 ## Repos
 
-- **`jokeane9/mission-control-desktop`** (public) — this repo, the launch target
+- **`jokeane9/orrery`** (public) — this repo, the launch target
 - **`jokeane9/homebrew-tap`** (public) — the Homebrew tap, auto-bumped on release
-- **`jokeane9/mission-control`** (private) — the original personal dev copy with
+- **`jokeane9/orrery`** (private) — the original personal dev copy with
   real `baseline.json` + history. Not the source of truth for distribution.
 
 ## Design language

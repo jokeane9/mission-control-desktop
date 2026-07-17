@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Mission Control — macOS menu-bar app.
+"""Orrery — macOS menu-bar app.
 Glanceable per-project git status; opens the full dashboard.
 Reuses generate.py for git scanning + HTML regeneration.
 
@@ -36,7 +36,7 @@ def status_label(name, g):
     return f'{mark}  {name:<15} {tail}'
 
 
-class MissionControl(rumps.App):
+class Orrery(rumps.App):
     def __init__(self):
         super().__init__("◉", quit_button="Quit")
         self.timer = rumps.Timer(self.refresh, generate.REFRESH_MIN * 60)
@@ -80,4 +80,4 @@ class MissionControl(rumps.App):
 
 
 if __name__ == "__main__":
-    MissionControl().run()
+    Orrery().run()

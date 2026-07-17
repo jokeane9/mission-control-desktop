@@ -1,11 +1,53 @@
 # Changelog
 
-All notable changes to Mission Control are documented here. Format follows
+All notable changes to Orrery are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this project uses
 [Semantic Versioning](https://semver.org/) — one version number for both
 platforms.
 
 ## [Unreleased]
+
+## [2.0.0] — 2026-07-16
+### Changed
+- **Mission Control is now Orrery.** The old name collided with Apple's own
+  Mission Control, and the collision wasn't cosmetic: `open -a "Mission Control"`
+  resolved to Apple's window manager, so the most common scripted launch path
+  silently did nothing. An orrery is a desk instrument that shows every planet's
+  position at once — the product in one word. The app, the Homebrew cask
+  (`mission-control-desktop` → `orrery`), the bundle id, the winget package, and
+  the download filenames all move together.
+- **Major, not minor.** Nothing about `baseline.json`'s schema changed, but the
+  cask token and bundle id did, and that's the most install-breaking thing a
+  release can do short of a schema change. You deserve the signal.
+
+### Migrations (automatic — you shouldn't have to do anything)
+- **Your config moves with you.** The data dir is keyed off the app name, so
+  first launch copies `Mission Control/` → `Orrery/` (baseline, PM notes, caches)
+  rather than opening empty. It copies rather than moves — the old folder stays
+  put as a fallback, and is only cleaned up by `brew uninstall --zap`.
+- **Your GitHub token still works.** The keychain service was renamed too; a
+  pre-2.0 token is read from the old entry once and re-saved under the new one,
+  so the rename doesn't look like a surprise logout.
+- **`.mission-control.json` still works.** The per-repo block file is now
+  `.orrery.json` / `.orrery.yml` (and the `orrery:` frontmatter key), but the old
+  spellings are still read — they live in *your* repos, so this release can't
+  retire them. New name wins where both exist.
+
+### Upgrading
+- **Homebrew:** `brew upgrade` follows the rename automatically (the tap carries
+  a `cask_renames.json`). On macOS the first launch of any new unsigned version
+  needs one "Open Anyway" in System Settings → Privacy & Security (see the
+  README) — that's notarization, not this rename.
+- **If you set `HOMEBREW_REQUIRE_TAP_TRUST`,** Homebrew trusts casks by *token*,
+  so the rename invalidates your existing entry and the cask is refused until you
+  re-trust it once:
+  ```sh
+  brew trust --cask jokeane9/tap/orrery
+  ```
+  Most people don't set that variable and won't see this.
+- **Windows:** the installer upgrades in place; the Start-menu entry is renamed.
+- **winget:** the package identifier changed, so `winget upgrade` won't cross the
+  rename — install `JohnOKeane.Orrery` once.
 
 ## [1.7.0] — 2026-07-16
 ### Added
@@ -155,11 +197,11 @@ platforms.
 - CI release pipeline: `v*` tag → build both platforms → publish GitHub Release
   → auto-bump the Homebrew cask.
 
-[Unreleased]: https://github.com/jokeane9/mission-control-desktop/compare/v1.2.2...HEAD
-[1.2.2]: https://github.com/jokeane9/mission-control-desktop/compare/v1.2.1...v1.2.2
-[1.2.1]: https://github.com/jokeane9/mission-control-desktop/compare/v1.2.0...v1.2.1
-[1.2.0]: https://github.com/jokeane9/mission-control-desktop/compare/v1.1.0...v1.2.0
-[1.1.0]: https://github.com/jokeane9/mission-control-desktop/compare/v1.0.2...v1.1.0
-[1.0.2]: https://github.com/jokeane9/mission-control-desktop/compare/v1.0.1...v1.0.2
-[1.0.1]: https://github.com/jokeane9/mission-control-desktop/compare/v1.0.0...v1.0.1
+[Unreleased]: https://github.com/jokeane9/orrery/compare/v1.2.2...HEAD
+[1.2.2]: https://github.com/jokeane9/orrery/compare/v1.2.1...v1.2.2
+[1.2.1]: https://github.com/jokeane9/orrery/compare/v1.2.0...v1.2.1
+[1.2.0]: https://github.com/jokeane9/orrery/compare/v1.1.0...v1.2.0
+[1.1.0]: https://github.com/jokeane9/orrery/compare/v1.0.2...v1.1.0
+[1.0.2]: https://github.com/jokeane9/orrery/compare/v1.0.1...v1.0.2
+[1.0.1]: https://github.com/jokeane9/orrery/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/jokeane9/mission-control-desktop/releases/tag/v1.0.0

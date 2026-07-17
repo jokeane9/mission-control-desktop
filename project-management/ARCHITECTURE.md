@@ -1,4 +1,4 @@
-# Mission Control — Architecture
+# Orrery — Architecture
 
 One Python codebase, two build targets. Read before touching how the layers
 connect.
@@ -48,7 +48,7 @@ place platform differences live.
     points `tools.vizstack` / `tools.agentviz` at those tools)
   - `main()` — scans all projects, renders `index.html`
 - `app.py` — `webview` window; background regen thread; `Api.refresh()` JS bridge
-- `packaging/mission_control.spec` — PyInstaller build for both platforms
+- `packaging/orrery.spec` — PyInstaller build for both platforms
   (BUNDLE on macOS, COLLECT dir on Windows); strips leading `v` from version
 
 ---

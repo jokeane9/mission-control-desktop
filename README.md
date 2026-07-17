@@ -1,6 +1,6 @@
-# Mission Control
+# Orrery
 
-One window, every project's live state. Mission Control scans your local git
+One window, every project's live state. Orrery scans your local git
 repos and renders a dark, keyboard-driven dashboard: per-project cards with
 branch / uncommitted / unmerged / unpushed chips, plus the human facts no tool
 can derive — what the project *is*, where prod lives, which accounts it's tied
@@ -17,8 +17,8 @@ nothing but Python — no installer, no security prompts.
 ### Run from source (all platforms, zero setup friction)
 
 ```sh
-git clone https://github.com/jokeane9/mission-control-desktop
-cd mission-control-desktop
+git clone https://github.com/jokeane9/orrery
+cd orrery
 python3 -m venv .venv && ./.venv/bin/pip install -r requirements.txt
 ./.venv/bin/python app.py        # desktop window
 # or, no dependencies at all — just open the generated page in your browser:
@@ -29,10 +29,10 @@ python3 -m venv .venv && ./.venv/bin/pip install -r requirements.txt
 
 - **Homebrew** (recommended once a release is tagged):
   ```sh
-  brew install --cask jokeane9/tap/mission-control-desktop
+  brew install --cask jokeane9/tap/orrery
   ```
 - **Direct download:** grab the `.dmg` from
-  [Releases](https://github.com/jokeane9/mission-control-desktop/releases),
+  [Releases](https://github.com/jokeane9/orrery/releases),
   drag the app to Applications.
 - **First launch:** if the build isn't notarized yet, macOS will say it
   "cannot verify the developer." Open **System Settings → Privacy & Security**,
@@ -42,7 +42,7 @@ python3 -m venv .venv && ./.venv/bin/pip install -r requirements.txt
 ### Windows (packaged app)
 
 Download the setup `.exe` (or the portable `.zip`) from
-[Releases](https://github.com/jokeane9/mission-control-desktop/releases) and
+[Releases](https://github.com/jokeane9/orrery/releases) and
 run it. If SmartScreen shows "Windows protected your PC," click **More info →
 Run anyway**.
 
@@ -50,8 +50,8 @@ Run anyway**.
 
 The app creates a starter config on first launch:
 
-- macOS: `~/Library/Application Support/Mission Control/baseline.json`
-- Windows: `%APPDATA%\Mission Control\baseline.json`
+- macOS: `~/Library/Application Support/Orrery/baseline.json`
+- Windows: `%APPDATA%\Orrery\baseline.json`
 - From source: `baseline.json` next to the scripts
 
 Add one entry per project — a `name`, a `path` to a local git repo, and
@@ -61,8 +61,8 @@ whatever facts you want on the card — then hit **Refresh git** (⌘R / Ctrl+R)
 Control auto-discovers every git repo inside them, populating each card from the
 repo itself — its `CLAUDE.md`/`AGENTS.md`, `README`, or `package.json`. Anything
 you set in `baseline.json` still wins; auto-fill only fills the gaps. A repo can
-describe its own card exactly with a `.mission-control.json` (or a
-`mission-control:` block in `CLAUDE.md`) — see
+describe its own card exactly with a `.orrery.json` (or a
+`orrery:` block in `CLAUDE.md`) — see
 [the schema](project-management/autopopulate-schema.md).
 
 ```jsonc
@@ -108,5 +108,5 @@ which builds both platforms and drafts a GitHub release.
 
 ## License
 
-MIT — see [LICENSE](LICENSE). If Mission Control earns a place in your day,
+MIT — see [LICENSE](LICENSE). If Orrery earns a place in your day,
 donations are welcome (link on the blog / GitHub Sponsors).

@@ -19,15 +19,15 @@ command -v "$PYI" >/dev/null || {
   echo "pyinstaller not found — pip install pyinstaller" >&2; exit 1; }
 
 rm -rf build dist
-"$PYI" --noconfirm packaging/mission_control.spec
-APP="dist/Mission Control.app"
+"$PYI" --noconfirm packaging/orrery.spec
+APP="dist/Orrery.app"
 [ -d "$APP" ] || { echo "build failed: $APP missing" >&2; exit 1; }
 
-DMG="dist/MissionControl-${VERSION}.dmg"
+DMG="dist/Orrery-${VERSION}.dmg"
 STAGE="$(mktemp -d)"
 cp -R "$APP" "$STAGE/"
 ln -s /Applications "$STAGE/Applications"
-hdiutil create -volname "Mission Control" -srcfolder "$STAGE" -ov -format UDZO "$DMG"
+hdiutil create -volname "Orrery" -srcfolder "$STAGE" -ov -format UDZO "$DMG"
 rm -rf "$STAGE"
 
 if [ -n "${CODESIGN_IDENTITY:-}" ]; then

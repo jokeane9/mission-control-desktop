@@ -119,22 +119,39 @@ def _normalize(d):
     return {k: v for k, v in out.items() if k in PROJECT_KEYS}
 
 
+# The per-repo block file, newest name first. `.mission-control.*` and the
+# matching frontmatter key are the pre-2.0 spelling: they live in the user's OWN
+# repos, so the v2.0.0 rename can't retire them — dropping them would silently
+# stop reading config we'd previously told people to write, with no error to
+# explain why their cards emptied. Read both, new name wins.
+# Removal criterion: never, unless a major version deliberately drops it and
+# says so in the changelog.
+BLOCK_JSON = (".orrery.json", ".mission-control.json")
+BLOCK_YAML = (".orrery.yml", ".orrery.yaml",
+              ".mission-control.yml", ".mission-control.yaml")
+BLOCK_KEYS = ("orrery", "mission-control")
+
+
 def read_block(path):
-    """Structured block: .mission-control.json → .yml/.yaml → CLAUDE/AGENTS.md
-    frontmatter. First one found wins."""
+    """Structured block: .orrery.json → .yml/.yaml → CLAUDE/AGENTS.md
+    frontmatter. First one found wins; the legacy .mission-control.* spelling is
+    accepted at each step."""
     try:
-        j = os.path.join(path, ".mission-control.json")
-        if os.path.isfile(j):
-            return _normalize(json.load(open(j, encoding="utf-8")))
-        for name in (".mission-control.yml", ".mission-control.yaml"):
+        for name in BLOCK_JSON:
+            f = os.path.join(path, name)
+            if os.path.isfile(f):
+                return _normalize(json.load(open(f, encoding="utf-8")))
+        for name in BLOCK_YAML:
             f = os.path.join(path, name)
             if os.path.isfile(f):
                 return _normalize(parse_mini_yaml(open(f, encoding="utf-8").read()))
         for name in ("CLAUDE.md", "AGENTS.md"):
             f = os.path.join(path, name)
-            if os.path.isfile(f):
-                sub = _frontmatter_block(open(f, encoding="utf-8").read(),
-                                         "mission-control")
+            if not os.path.isfile(f):
+                continue
+            text = open(f, encoding="utf-8").read()
+            for key in BLOCK_KEYS:
+                sub = _frontmatter_block(text, key)
                 if sub:
                     return _normalize(parse_mini_yaml(sub))
     except Exception:

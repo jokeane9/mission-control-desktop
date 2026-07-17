@@ -1,34 +1,34 @@
-; Inno Setup script for Mission Control (built by packaging/build_windows.ps1)
+; Inno Setup script for Orrery (built by packaging/build_windows.ps1)
 #ifndef AppVersion
   #define AppVersion "1.0.0"
 #endif
 
 [Setup]
 AppId={{7C1FBE0D-3E1A-4A6B-9B1B-6C2C6A2C9D01}
-AppName=Mission Control
+AppName=Orrery
 AppVersion={#AppVersion}
 AppPublisher=John O'Keane
 AppPublisherURL=https://github.com/jokeane9
-DefaultDirName={autopf}\Mission Control
-DefaultGroupName=Mission Control
+DefaultDirName={autopf}\Orrery
+DefaultGroupName=Orrery
 DisableProgramGroupPage=yes
 LicenseFile=..\..\LICENSE
 OutputDir=..\..\dist
-OutputBaseFilename=MissionControl-{#AppVersion}-setup
+OutputBaseFilename=Orrery-{#AppVersion}-setup
 SetupIconFile=..\icon.ico
-UninstallDisplayIcon={app}\Mission Control.exe
+UninstallDisplayIcon={app}\Orrery.exe
 Compression=lzma2
 SolidCompression=yes
 PrivilegesRequired=lowest
 ArchitecturesInstallIn64BitMode=x64compatible
 
 [Files]
-Source: "..\..\dist\Mission Control\*"; DestDir: "{app}"; Flags: recursesubdirs
+Source: "..\..\dist\Orrery\*"; DestDir: "{app}"; Flags: recursesubdirs
 Source: "MicrosoftEdgeWebview2Setup.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall; Check: WebView2Missing
 
 [Icons]
-Name: "{autoprograms}\Mission Control"; Filename: "{app}\Mission Control.exe"
-Name: "{autodesktop}\Mission Control"; Filename: "{app}\Mission Control.exe"; Tasks: desktopicon
+Name: "{autoprograms}\Orrery"; Filename: "{app}\Orrery.exe"
+Name: "{autodesktop}\Orrery"; Filename: "{app}\Orrery.exe"; Tasks: desktopicon
 
 [Tasks]
 Name: desktopicon; Description: "Create a &desktop shortcut"; Flags: unchecked
@@ -36,7 +36,7 @@ Name: desktopicon; Description: "Create a &desktop shortcut"; Flags: unchecked
 [Run]
 Filename: "{tmp}\MicrosoftEdgeWebview2Setup.exe"; Parameters: "/silent /install"; \
   StatusMsg: "Installing Microsoft Edge WebView2 runtime…"; Check: WebView2Missing
-Filename: "{app}\Mission Control.exe"; Description: "Launch Mission Control"; \
+Filename: "{app}\Orrery.exe"; Description: "Launch Orrery"; \
   Flags: nowait postinstall skipifsilent
 
 [Code]
