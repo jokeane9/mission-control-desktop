@@ -19,7 +19,8 @@ repos and renders each one's live state — branch, uncommitted / unmerged /
 unpushed counts — next to the facts a tool can't infer: what the project is,
 where prod lives, what you're pushing on. On top of the project cards it carries
 a few whole-workspace views: a **Skills** catalog, a **Work Log** (commits +
-token usage over time), an aggregated **Roadmap**, and a **PM** scratchpad.
+token usage over time), an aggregated **Roadmap**, a **Worktrees** cleanup view,
+and a **PM** scratchpad.
 
 Everything is read live from disk on each render; the human facts live in one
 editable JSON file. Nothing leaves the machine.

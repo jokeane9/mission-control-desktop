@@ -485,6 +485,8 @@ def main():
     top_view("worklog", "work log", views.worklog_html(worklog, tokens))
     top_view("roadmap", "roadmap",
              views.roadmaps_html(views.collect_roadmaps(project_dirs)))
+    worktrees = views.collect_worktrees(project_dirs)
+    top_view("worktrees", "worktrees", views.worktrees_html(worktrees))
     top_view("pm", "pm", views.notes_html(views.load_notes(NOTES)))
 
     now_dt = datetime.datetime.now()
@@ -663,6 +665,30 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--mono);font
   font-family:-apple-system,'Segoe UI','Helvetica Neue',sans-serif;position:relative}
 .rmitem::before{content:'▸';position:absolute;left:0;color:var(--faint);font-size:9px;top:5px}
 .rmmore{font-size:10px;color:var(--faint);padding:2px 0 2px 14px}
+/* --- worktrees --- */
+.wtcount{margin-left:auto;font-size:9px;font-weight:400;letter-spacing:0;
+  color:var(--faint);background:var(--panel2);border:1px solid var(--border2);
+  border-radius:9px;padding:1px 6px}
+.wtrow{padding:7px 0;border-top:1px solid var(--border)}
+.wtmain{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}
+.wtname{font-size:12px;font-weight:700;color:var(--ink)}
+.wtbranch{font-size:10.5px;color:var(--blue)}
+.wtbranch.det{color:var(--amber)}
+.wtage{font-size:10px;color:var(--faint)}
+.wtverdict{margin-left:auto;font-size:10px;font-weight:700;letter-spacing:.02em}
+.wtverdict.ok{color:var(--green)}
+.wtverdict.no{color:#ff6b6b}
+.wtpath{font-size:10px;color:var(--faint);margin-top:2px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wtchips{display:flex;gap:6px;margin-top:4px}
+.wtchips:empty{display:none}
+.wtchip{font-size:9.5px;color:var(--muted);background:var(--panel2);
+  border:1px solid var(--border2);border-radius:9px;padding:1px 7px}
+.wtchip.amber{color:var(--amber);border-color:var(--amber)}
+.wthint{font-size:10px;color:var(--faint);padding:8px 0 2px;border-top:1px solid var(--border);
+  margin-top:6px}
+.wthint code{color:var(--muted);font-size:10px}
+.wtdim{color:var(--faint);font-size:11px;line-height:1.5;display:inline-block;margin-top:8px}
 /* --- PM scratchpad --- */
 .pmstatus{font-size:10px;color:var(--faint);margin-left:auto;align-self:center}
 .pmstatus.ok{color:var(--green)}

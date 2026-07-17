@@ -7,9 +7,11 @@ items, reorder if priorities shifted, add anything new. Now / Next / Later.
 
 ## Now
 
-- [ ] Nothing in flight. `main` clean, released through **v1.6.0**. A full-app
-      UX audit is captured in [`UX-AUDIT.md`](UX-AUDIT.md); the interaction
-      model in [`UX-FLOWS.md`](UX-FLOWS.md).
+- [ ] **v1.7.0 — Worktrees view** (in review). Lists every extra checkout across
+      the repos with a safe-to-remove verdict, closing the "invisible state"
+      hole: ghost worktrees under `.claude/worktrees/` that no `git status`
+      reports. A full-app UX audit is captured in [`UX-AUDIT.md`](UX-AUDIT.md);
+      the interaction model in [`UX-FLOWS.md`](UX-FLOWS.md).
 
 ## Next
 

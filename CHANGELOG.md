@@ -6,6 +6,16 @@ All notable changes to Mission Control are documented here. Format follows
 platforms.
 
 ## [Unreleased]
+### Added
+- **Worktrees view** — every extra checkout across your repos in one place, with
+  a safe-to-remove verdict on each. A worktree is a second folder checked out
+  from the same repo; Claude Code creates them under `.claude/worktrees/` and
+  only auto-removes them on a clean session exit, so interrupted sessions leave
+  ghost folders that no `git status` will ever mention. Each row shows the
+  parent repo, path, branch (or detached), age, uncommitted count and unmerged
+  commits; oldest first, so the ones you've forgotten surface at the top.
+  A worktree is only called safe when it has **zero uncommitted files** *and* a
+  HEAD reachable from some branch — anything else says NO and why.
 
 ## [1.6.1] — 2026-07-14
 ### Fixed
