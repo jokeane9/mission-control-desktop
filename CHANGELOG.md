@@ -7,6 +7,46 @@ platforms.
 
 ## [Unreleased]
 
+## [2.2.0] — 2026-07-16
+### Added
+- **Sessions view** — what your agents are doing, and what they left behind.
+  Every Claude Code session in your repos: live or idle, which branch, how long,
+  how many messages and tokens. Newest first.
+  - **It joins Worktrees.** A session that ended without cleaning up its
+    worktree is flagged *left a worktree* — the folder is still on disk. An
+    abandoned worktree and the interrupted session that stranded it are one
+    story; this is the other end of it.
+  - `orrery sessions` in the CLI, with `--days` and `--json`.
+  - **Metadata only — never prompts, never responses, never titles.** The
+    transcripts are the most sensitive thing on the machine. Timings, counts,
+    paths and token totals reach the page; content never does. There's a test
+    that fails if it ever leaks.
+  - Costs ~nothing: the Work Log already parses `~/.claude` transcripts, so
+    session metadata now comes out of the *same* pass and the same per-file
+    cache. Warm render is unchanged.
+
+
+## [2.1.0] — 2026-07-16
+### Added
+- **A CLI.** The dashboard as a command — `orrery status`, `worktrees`,
+  `standup`, `skills` — because a window you have to *open* loses to a command
+  you can pipe, and a CLI needs no bundle, no Gatekeeper and no notarization to
+  run.
+  - `--json` on every command, so it composes with whatever you already use:
+    `orrery status --json | jq '.projects[] | select(.attention) | .name'`
+  - `orrery status --strict` exits non-zero when something needs you, so
+    `orrery status --strict && ./deploy.sh` won't deploy over unsaved work.
+  - It reads the **installed app's config**, so the CLI and the window always
+    describe the same workspace (`--data` / `$ORRERY_DATA` to override).
+  - Colour only when attached to a terminal, and `NO_COLOR` is honoured — piped
+    output is clean text.
+
+### Changed
+- `generate.workspace()` is now the single source of truth for "what needs you".
+  The attention rollup used to live inline in the HTML render; the GUI and CLI
+  now both call it, so the two surfaces cannot disagree about which repos need
+  you or what the totals are.
+
 ## [2.0.0] — 2026-07-16
 ### Changed
 - **Mission Control is now Orrery.** The old name collided with Apple's own

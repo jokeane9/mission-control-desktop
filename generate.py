@@ -368,11 +368,27 @@ def group_slug(s):
 _TIER_RANK = {"major": 0, "tools": 1, "minor": 2}
 
 
-def main():
-    cfg = load_config()
-    # Read-only cache written out-of-band by github_sync.py (P3.2). {} if not
-    # synced — GitHub work never happens in the render path.
-    gh_cache = resolve.load_github_cache(os.path.join(DATA, "github_cache.json"))
+def use_data_dir(path):
+    """Re-point the module at another data dir. BASELINE/INDEX/NOTES are derived
+    from DATA at import, so setting DATA alone would desync them. The CLI uses
+    this to read the *installed app's* config instead of the source tree's."""
+    global DATA, BASELINE, INDEX, NOTES
+    DATA = path
+    BASELINE = os.path.join(DATA, "baseline.json")
+    INDEX = os.path.join(DATA, "index.html")
+    NOTES = os.path.join(DATA, "pm_notes.md")
+
+
+def workspace(cfg, gh_cache=None, with_maps=False):
+    """(projects, totals) — every non-hidden project, resolved, triage-sorted,
+    with the attention rollup. The single source of truth for "what needs you":
+    the HTML render and the CLI both call this, so they can never disagree about
+    which repos need you or what the totals are.
+
+    `with_maps` is the GUI-only viz step — it shells out to node/python per repo,
+    so the CLI leaves it off and stays fast.
+    """
+    gh_cache = gh_cache or {}
     projects, totals = [], {"dirty": 0, "unmerged": 0, "ahead": 0, "attn": 0}
     # Discover repos (baseline + scanned `roots` + synced GitHub) and resolve each
     # card's facts from layered sources. Explicit values always win.
@@ -384,7 +400,8 @@ def main():
             continue
         if path:
             g = collect(path)
-            maps = build_viz(facts["name"], path, facts, cfg.get("tools", {}), auto=auto)
+            maps = (build_viz(facts["name"], path, facts, cfg.get("tools", {}),
+                              auto=auto) if with_maps else [])
         else:                                           # uncloned GitHub repo
             g = dict(GIT_UNCLONED)
             maps = []
@@ -410,6 +427,15 @@ def main():
     # by urgency instead of raw discovery order.
     projects.sort(key=lambda pr: (not pr["attn"],
                                   _TIER_RANK.get((pr["p"].get("tier") or "").lower(), 3)))
+    return projects, totals
+
+
+def main():
+    cfg = load_config()
+    # Read-only cache written out-of-band by github_sync.py (P3.2). {} if not
+    # synced — GitHub work never happens in the render path.
+    gh_cache = resolve.load_github_cache(os.path.join(DATA, "github_cache.json"))
+    projects, totals = workspace(cfg, gh_cache, with_maps=True)
 
     esc = html.escape
     side, cards, details = [], [], []
@@ -518,6 +544,11 @@ def main():
              views.roadmaps_html(views.collect_roadmaps(project_dirs)))
     worktrees = views.collect_worktrees(project_dirs)
     top_view("worktrees", "worktrees", views.worktrees_html(worktrees))
+    # Same token_cache.json the Work Log uses: one parse of the transcripts feeds
+    # both views, so the second one is nearly free.
+    top_view("sessions", "sessions",
+             views.sessions_html(views.collect_sessions(
+                 project_dirs, os.path.join(DATA, "token_cache.json"))))
     top_view("pm", "pm", views.notes_html(views.load_notes(NOTES)))
 
     now_dt = datetime.datetime.now()

@@ -93,6 +93,35 @@ Point `tools.vizstack` / `tools.agentviz` in the config at
 [vizstack](https://github.com/jokeane9) / agentviz to get architecture and
 pipeline map tabs per project.
 
+## From the terminal
+
+The window isn't always the right surface. The same data, as a command — no
+bundle, no Gatekeeper, no notarization:
+
+```sh
+./cli.py status              # what needs you, across every repo
+./cli.py status --all        # including the clean ones
+./cli.py worktrees           # every extra checkout + a safe-to-remove verdict
+./cli.py standup --since week
+./cli.py skills auth         # search the Claude Code skills catalog
+```
+
+Add `--json` to any command to pipe it somewhere:
+
+```sh
+./cli.py status --json | jq '.projects[] | select(.attention) | .name'
+```
+
+`--strict` makes `status` exit non-zero when something needs you, so it works as
+a gate:
+
+```sh
+./cli.py status --strict && ./deploy.sh     # won't deploy over unsaved work
+```
+
+It reads the **installed app's config**, so the CLI and the window always show
+the same workspace. Override with `--data DIR` or `$ORRERY_DATA`.
+
 ## Build the apps
 
 See [DISTRIBUTION.md](DISTRIBUTION.md) for the full signing/notarization

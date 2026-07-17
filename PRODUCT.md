@@ -20,7 +20,9 @@ unpushed counts — next to the facts a tool can't infer: what the project is,
 where prod lives, what you're pushing on. On top of the project cards it carries
 a few whole-workspace views: a **Skills** catalog, a **Work Log** (commits +
 token usage over time), an aggregated **Roadmap**, a **Worktrees** cleanup view,
-and a **PM** scratchpad.
+a **Sessions** view (what your agents are doing and what they left behind), and
+a **PM** scratchpad. The same data is available from the terminal (`orrery
+status`, `orrery sessions`, `--json`).
 
 Everything is read live from disk on each render; the human facts live in one
 editable JSON file. Nothing leaves the machine.
