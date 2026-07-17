@@ -8,6 +8,11 @@ platforms.
 ## [Unreleased]
 
 ## [2.2.0] — 2026-07-16
+
+Two features, one release: they landed in a single commit, so they ship as one
+version rather than pretending to be two. Both are the same bet — Orrery's
+differentiator isn't the git dashboard, it's the state your agents leave behind.
+
 ### Added
 - **Sessions view** — what your agents are doing, and what they left behind.
   Every Claude Code session in your repos: live or idle, which branch, how long,
@@ -16,7 +21,6 @@ platforms.
     worktree is flagged *left a worktree* — the folder is still on disk. An
     abandoned worktree and the interrupted session that stranded it are one
     story; this is the other end of it.
-  - `orrery sessions` in the CLI, with `--days` and `--json`.
   - **Metadata only — never prompts, never responses, never titles.** The
     transcripts are the most sensitive thing on the machine. Timings, counts,
     paths and token totals reach the page; content never does. There's a test
@@ -24,15 +28,20 @@ platforms.
   - Costs ~nothing: the Work Log already parses `~/.claude` transcripts, so
     session metadata now comes out of the *same* pass and the same per-file
     cache. Warm render is unchanged.
+  - Note the horizon: Claude Code prunes transcripts at ~29 days, so the join
+    only explains *fresh* ghosts. Worktrees persist; sessions expire. For
+    anything older, the Worktrees verdict stands alone — which is why it's
+    pessimistic by default.
 
-
-## [2.1.0] — 2026-07-16
-### Added
-- **A CLI.** The dashboard as a command — `orrery status`, `worktrees`,
-  `standup`, `skills` — because a window you have to *open* loses to a command
-  you can pipe, and a CLI needs no bundle, no Gatekeeper and no notarization to
-  run.
-  - `--json` on every command, so it composes with whatever you already use:
+- **A CLI.** The dashboard as a command — because a window you have to *open*
+  loses to a command you can pipe, and a CLI needs no bundle, no Gatekeeper and
+  no notarization to run.
+  ```sh
+  orrery status [--all] [--strict]     orrery worktrees
+  orrery sessions [--days N]           orrery standup [--since today|week|month|3months]
+  orrery skills [search]               <cmd> --json
+  ```
+  - `--json` on every command, so it composes with what you already use:
     `orrery status --json | jq '.projects[] | select(.attention) | .name'`
   - `orrery status --strict` exits non-zero when something needs you, so
     `orrery status --strict && ./deploy.sh` won't deploy over unsaved work.
@@ -46,6 +55,12 @@ platforms.
   The attention rollup used to live inline in the HTML render; the GUI and CLI
   now both call it, so the two surfaces cannot disagree about which repos need
   you or what the totals are.
+
+### Known issue
+- **"Needs attention" over-reports** ([#44](https://github.com/jokeane9/orrery/issues/44)).
+  `collect()` counts every unmerged *remote* branch, so a repo you cloned to read
+  gets flagged for upstream branches you'll never merge (langflow: 1884). Both
+  the window and `orrery status` inherit it. Fix queued.
 
 ## [2.0.0] — 2026-07-16
 ### Changed

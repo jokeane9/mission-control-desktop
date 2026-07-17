@@ -31,16 +31,12 @@ distribution friction (Gatekeeper, notarization) entirely.
 
 ## Now
 
-- [ ] **CLI — `orrery status` / `worktrees` / `standup` / `--json`**
-      ([#38](https://github.com/jokeane9/orrery/issues/38)). Cheap: the engine is
-      stdlib-only and already runs standalone, and `views.py` is already split
-      into pure `collect_*()` + `*_html()`. A formatter over functions that exist.
-      No Gatekeeper, no notarization, scriptable.
-- [ ] **Sessions view** ([#39](https://github.com/jokeane9/orrery/issues/39)) —
-      what your agents are doing and what they abandoned. `collect_tokens()`
-      already parses `~/.claude` transcripts; this is a second `collect_*()` over
-      data the render path already reads. Pairs with Worktrees: the ghost and the
-      session that stranded it are one story.
+- [ ] **"Needs attention" cries wolf** ([#44](https://github.com/jokeane9/orrery/issues/44)) —
+      19 of 29 projects flagged, mostly by upstream branches in repos cloned to
+      read (langflow alone: 1884 unmerged). Both the window and `orrery status`
+      open on it, so it's the first thing anyone sees from either surface. The
+      north star is "what needs you"; a signal that fires on two-thirds of
+      projects answers nothing. **Fix before the launch post.**
 
 ## Next
 
@@ -98,6 +94,22 @@ Written down so they don't get relitigated every quarter.
 
 ## Completed
 
+- [x] 2026-07-16 — **CLI + Sessions** (v2.2.0, #45/#46): the wedge, made
+      deliberate. **Sessions** — every Claude Code session per repo (live/idle,
+      branch, span, msgs, tokens) and the join that matters: a session whose
+      worktree is still on disk is flagged *left a worktree*. Metadata only,
+      never content (pinned by a test that plants a secret). Falls out of the
+      *same* transcript pass the Work Log already did, so warm render is
+      unchanged. **CLI** — `orrery status/worktrees/sessions/standup/skills`,
+      `--json`, `--strict` as a deploy gate; reads the installed app's config so
+      both surfaces agree. Forced `generate.workspace()` out of the HTML render,
+      so the GUI and CLI can't disagree about what needs you.
+      Shipped as ONE release: #46 was stacked on #45 and squash-merged first, so
+      both landed in one commit — merging #45 afterwards would have *deleted*
+      Sessions (663 deletions). Lesson: merge the base of a stack first.
+      Learned along the way: transcripts are pruned at ~29 days, so the
+      Sessions↔Worktrees join has a horizon and could never explain the 68-day
+      ghost that started all this. Worktrees persist; sessions expire.
 - [x] 2026-07-16 — **v2.0.0 — renamed Mission Control → Orrery** (#37): the old
       name collided with Apple's window manager, and not cosmetically —
       `open -a "Mission Control"` silently launched Apple's app, so the most
