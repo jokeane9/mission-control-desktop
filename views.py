@@ -11,6 +11,9 @@ Views:
              filter and a "Copy as standup" button.
   Roadmap  — every project's ROADMAP.md in one place: the Now/Next sections
              (or the top items when a roadmap has neither), linked to the file.
+  Worktrees — every extra checkout across the repos, oldest first, each with a
+             safe-to-remove verdict. Surfaces the ghost worktrees an interrupted
+             Claude Code session leaves under .claude/worktrees/.
   PM       — a local, always-there admin scratchpad: one free-text notes file
              the desktop app autosaves. Not synced; lives in the data dir.
 """
@@ -21,6 +24,7 @@ import json
 import os
 import re
 import subprocess
+import time
 from pathlib import Path
 
 CLAUDE_DIR = os.path.expanduser("~/.claude")
@@ -591,6 +595,183 @@ def skills_html(grouped):
         out.append(f'''<div class="sgroup">
   <div class="sgtitle">{esc(label)}<span class="sgcount">{len(entries)}</span></div>
   {"".join(rows)}
+</div>''')
+    return "".join(out)
+
+
+# --------------------------------------------------------------------------- #
+# Worktrees — every extra checkout across the dashboard's repos.
+#
+# A worktree is a second folder holding a checkout of the same repo: one object
+# store, many working directories. They go invisible easily — Claude Code makes
+# them under .claude/worktrees/ and only auto-removes them on a clean session
+# exit, so an interrupted session leaves a ghost folder that no `git status`
+# anywhere will ever mention. This view is the workspace-level answer to "what
+# checkouts exist that I've forgotten about, and can I delete them?"
+#
+# The verdict is the point, and it is deliberately pessimistic: "safe" requires
+# BOTH a clean tree AND a HEAD reachable from some branch. Removing a worktree
+# deletes the folder, not the branch — so a HEAD that lives on a branch survives
+# removal, while a detached HEAD's commits become unreachable and die with it.
+# Anything we cannot prove safe says NO and why. Never green-light real work.
+# --------------------------------------------------------------------------- #
+WT_SAFE = "safe to remove"
+
+
+def _wt_age_days(path):
+    """Days since the worktree folder was last touched — the ghost signal. Uses
+    os.path.getmtime, not `stat -f %m`: this ships on Windows too. -1 if the
+    folder is gone (a prunable registration whose directory was deleted)."""
+    try:
+        return max(0, int((time.time() - os.path.getmtime(path)) / 86400))
+    except OSError:
+        return -1
+
+
+def _wt_parse(porcelain):
+    """`git worktree list --porcelain` → [{path, head, branch, detached,
+    locked, prunable}, …]. Records are blank-line separated; the main worktree
+    is the first record. Unknown attribute lines are ignored."""
+    out, cur = [], None
+    for line in porcelain.splitlines():
+        if not line.strip():
+            continue
+        key, _, val = line.partition(" ")
+        if key == "worktree":
+            cur = {"path": val, "head": "", "branch": "", "detached": False,
+                   "locked": False, "prunable": False}
+            out.append(cur)
+        elif cur is None:
+            continue
+        elif key == "HEAD":
+            cur["head"] = val
+        elif key == "branch":
+            cur["branch"] = val.rsplit("/", 1)[-1]      # refs/heads/x → x
+        elif key in ("detached", "locked", "prunable"):
+            cur[key] = True
+    return out
+
+
+def _wt_verdict(wt):
+    """(safe: bool, why: str) for one collected worktree. Every NO carries the
+    reason, so the row explains itself without a second click."""
+    if wt["prunable"]:
+        # The folder is already gone; only the registration is left behind.
+        return True, "folder already gone · git worktree prune"
+    if wt["dirty"]:
+        n = wt["dirty"]
+        return False, f"NO — {n} uncommitted file{'s' if n != 1 else ''}"
+    if not wt["contained"]:
+        return False, "NO — commit is not on any branch"
+    if wt["locked"]:
+        return False, "NO — worktree is locked"
+    return True, WT_SAFE
+
+
+def _wt_base(repo):
+    """The repo's default branch ref for the unmerged count — origin/HEAD when
+    the remote publishes one, else a local main/master. '' when neither exists
+    (a repo with no remote and no conventional trunk), which zeroes the count
+    rather than inventing a baseline."""
+    ref = _git(repo, "symbolic-ref", "refs/remotes/origin/HEAD")
+    if ref:
+        return ref.split("refs/remotes/", 1)[-1]        # → origin/main
+    for b in ("main", "master"):
+        if _git(repo, "rev-parse", "--verify", "--quiet", f"refs/heads/{b}"):
+            return b
+    return ""
+
+
+def collect_worktrees(project_dirs):
+    """[{repo, repo_path, path, name, branch, detached, age_days, dirty,
+    unmerged, safe, why, locked, prunable}, …] — every worktree of every
+    dashboard repo except each repo's own main checkout. Sorted oldest-first:
+    the ghosts you've forgotten about float to the top."""
+    out = []
+    for name, pdir in sorted(project_dirs):
+        repo = os.path.expanduser(pdir)
+        trees = _wt_parse(_git(repo, "worktree", "list", "--porcelain"))
+        if len(trees) <= 1:             # the common case: one repo, one checkout
+            continue
+        base = _wt_base(repo)
+        for wt in trees[1:]:            # [0] is the repo's own main checkout
+            path = wt["path"]
+            live = os.path.isdir(path) and not wt["prunable"]
+            # Dirty/unmerged are read from the worktree itself; containment is
+            # asked of the parent, whose refs cover every branch in the repo.
+            status = _git(path, "status", "--porcelain") if live else ""
+            dirty = len([l for l in status.splitlines() if l.strip()])
+            head = wt["head"]
+            contained = bool(_git(repo, "branch", "-a", "--contains", head)) if head else False
+            unmerged = 0
+            if head and base:
+                n = _git(repo, "rev-list", "--count", f"{base}..{head}")
+                unmerged = int(n) if n.isdigit() else 0
+            rec = {"repo": name, "repo_path": repo, "path": path,
+                   "name": os.path.basename(path.rstrip("/\\")) or path,
+                   "branch": wt["branch"], "detached": wt["detached"],
+                   "age_days": _wt_age_days(path), "dirty": dirty,
+                   "unmerged": unmerged, "locked": wt["locked"],
+                   "prunable": wt["prunable"] or not os.path.isdir(path),
+                   "contained": contained}
+            rec["safe"], rec["why"] = _wt_verdict(rec)
+            out.append(rec)
+    out.sort(key=lambda w: -w["age_days"])
+    return out
+
+
+def worktrees_html(worktrees):
+    """The Worktrees view body: one row per worktree, oldest first, each with
+    its safe-to-remove verdict and the exact removal command."""
+    esc = html.escape
+    risky = [w for w in worktrees if not w["safe"]]
+    repos = len({w["repo"] for w in worktrees})
+    sub = (f'{len(worktrees)} extra checkout{"s" if len(worktrees) != 1 else ""} '
+           f'across {repos} repo{"s" if repos != 1 else ""}'
+           + (f' · {len(risky)} hold unsaved work' if risky else ' · all safe to remove'))
+    out = [f'''<div class="dhead"><span class="dname">Worktrees</span>
+    <span class="dthesis">{esc(sub) if worktrees else "no extra checkouts"}</span></div>''']
+    if not worktrees:
+        out.append(
+            '<div class="vempty">Every repo has just its one checkout — nothing '
+            'stray to clean up.<br><span class="wtdim">A worktree is a second '
+            'folder checked out from the same repo. Claude Code makes them under '
+            '<code>.claude/worktrees/</code> and only removes them on a clean '
+            'session exit, so interrupted sessions leave ghosts here.</span></div>')
+        return "".join(out)
+
+    by_repo = {}
+    for w in worktrees:
+        by_repo.setdefault(w["repo"], []).append(w)
+
+    for repo, trees in by_repo.items():
+        rows = []
+        for w in trees:
+            branch = ("(detached)" if w["detached"] or not w["branch"]
+                      else w["branch"])
+            bcls = "wtbranch det" if w["detached"] or not w["branch"] else "wtbranch"
+            age = "—" if w["age_days"] < 0 else f'{w["age_days"]}d'
+            chips = []
+            if w["dirty"]:
+                chips.append(f'<span class="wtchip amber">{w["dirty"]} uncommitted</span>')
+            if w["unmerged"]:
+                chips.append(f'<span class="wtchip">{w["unmerged"]} unmerged</span>')
+            if w["locked"]:
+                chips.append('<span class="wtchip">locked</span>')
+            vcls = "wtverdict ok" if w["safe"] else "wtverdict no"
+            rows.append(f'''<div class="wtrow">
+  <div class="wtmain"><span class="wtname">{esc(w["name"])}</span>
+    <span class="{bcls}">{esc(branch)}</span>
+    <span class="wtage" title="last touched">{age}</span>
+    <span class="{vcls}">{esc(w["why"])}</span></div>
+  <div class="wtpath" title="{esc(w["path"], quote=True)}">{esc(w["path"])}</div>
+  <div class="wtchips">{"".join(chips)}</div>
+</div>''')
+        cmd = esc(f'git -C {trees[0]["repo_path"]} worktree remove <path>')
+        out.append(f'''<div class="sgroup">
+  <div class="sgtitle">{esc(repo)}<span class="wtcount">{len(trees)}</span></div>
+  {"".join(rows)}
+  <div class="wthint">Remove a safe one: <code>{cmd}</code></div>
 </div>''')
     return "".join(out)
 
