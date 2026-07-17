@@ -31,12 +31,9 @@ distribution friction (Gatekeeper, notarization) entirely.
 
 ## Now
 
-- [ ] **"Needs attention" cries wolf** ([#44](https://github.com/jokeane9/orrery/issues/44)) —
-      19 of 29 projects flagged, mostly by upstream branches in repos cloned to
-      read (langflow alone: 1884 unmerged). Both the window and `orrery status`
-      open on it, so it's the first thing anyone sees from either surface. The
-      north star is "what needs you"; a signal that fires on two-thirds of
-      projects answers nothing. **Fix before the launch post.**
+- [ ] Nothing in flight. `main` clean, released through **v2.2.1**. Next up is
+      distribution: notarization (#9) so installs stop fighting Gatekeeper, then
+      the launch post. See the full-app UX audit in [`UX-AUDIT.md`](UX-AUDIT.md).
 
 ## Next
 
@@ -94,6 +91,11 @@ Written down so they don't get relitigated every quarter.
 
 ## Completed
 
+- [x] 2026-07-17 — **"Needs attention" cries wolf fixed** (v2.2.1, #44):
+      `collect()` counted every unmerged *remote* branch, so repos cloned to
+      read flagged on hundreds of upstream PRs (langflow: 1884). Now counts
+      local branches only — 19→14 projects flagged, 2374→12 unmerged, all real.
+      `collect()` had no test; now it does.
 - [x] 2026-07-16 — **CLI + Sessions** (v2.2.0, #45/#46): the wedge, made
       deliberate. **Sessions** — every Claude Code session per repo (live/idle,
       branch, span, msgs, tokens) and the join that matters: a session whose

@@ -7,6 +7,18 @@ platforms.
 
 ## [Unreleased]
 
+## [2.2.1] — 2026-07-17
+### Fixed
+- **"Needs attention" no longer cries wolf** ([#44](https://github.com/jokeane9/orrery/issues/44)).
+  The unmerged-branch count included every *remote* branch, so a repo you cloned
+  to read was flagged for hundreds of open upstream PRs you'll never merge
+  (langflow: 1884, dspy: 366). On a real 29-project workspace that lit up 19
+  projects and reported 2374 "unmerged branches". It now counts only **local**
+  branches — your own work in progress — which drops the same workspace to 14
+  genuinely-need-you projects and 12 unmerged. The other signals (uncommitted,
+  unpushed, stashes) are unchanged; `collect()` now has tests.
+
+
 ## [2.2.0] — 2026-07-16
 
 Two features, one release: they landed in a single commit, so they ship as one
