@@ -1420,7 +1420,10 @@ def sessions_html(sessions, sources_present=None):
             'never prompts.</span></div>')
         return "".join(out)
 
-    def render_row(s):
+    def render_row(s, show_home=False):
+        # show_home: name the session's home repo on the row. The graveyard groups
+        # by repo so its header already says it; the flat Live & active list does
+        # not, so a live row must state its own repo or it's unattributable.
         # Lifecycle drives both the dot and the pill (Concept-B colour: green =
         # alive, amber = needs you, grey/dim = at rest).
         key, label, cls = _lifecycle(s)
@@ -1459,6 +1462,8 @@ def sessions_html(sessions, sources_present=None):
         repos_html = "".join(
             f'<span class="wtrepo" title="also touched this repo">{esc(r)}</span>'
             for r in extra_repos)
+        # Home repo badge — only where the row isn't already under a repo header.
+        home_html = f'<span class="wtrepo home">{esc(home)}</span>' if show_home else ""
         chips = []
         if s["msgs"]:
             chips.append(f'<span class="wtchip">{s["msgs"]} msgs</span>')
@@ -1510,7 +1515,7 @@ def sessions_html(sessions, sources_present=None):
         else:
             name = f'<span class="wtname">{esc(s["id"])}</span>'
         return (f'<div class="wtrow" data-src="{esc(src)}">'
-                f'<div class="wtmain">{dot}{tag}{name}{repos_html}{branch}{pill}</div>'
+                f'<div class="wtmain">{dot}{tag}{name}{home_html}{repos_html}{branch}{pill}</div>'
                 f'<div class="wtpath" title="{esc(s["cwd"], quote=True)}">{footline}</div>'
                 f'<div class="wtchips">{"".join(chips)}{endctl}</div>'
                 f'</div>')
@@ -1525,7 +1530,7 @@ def sessions_html(sessions, sources_present=None):
         out.append('<div class="ssec"><span class="ssectl live">Live &amp; active</span>'
                    f'<span class="sseccount">{len(live_active)}</span></div>'
                    '<div class="sgroup" data-sessgroup>'
-                   + "".join(render_row(s) for s in live_active) + '</div>')
+                   + "".join(render_row(s, show_home=True) for s in live_active) + '</div>')
 
     if done:
         out.append('<div class="ssec grave"><span class="ssectl grave">Repo graveyard</span>'

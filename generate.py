@@ -749,6 +749,7 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--mono);font
 .wtsid{font-size:9.5px;color:var(--faintline);font-weight:400}  /* secondary UUID when a title leads */
 .wtrepo{font-size:9px;color:var(--muted);background:#1a2029;border:1px solid var(--border2);
   border-radius:4px;padding:0 5px;margin-left:2px}                /* a repo the session ALSO touched */
+.wtrepo.home{color:var(--ink);border-color:var(--faintline)}      /* the session's home repo (live rows) */
 .wtchip.pr .rp{color:var(--faint);font-weight:400;margin-left:1px}  /* cross-repo PR's repo name */
 .wtbranch{font-size:10.5px;color:var(--blue)}
 .wtbranch.det{color:var(--amber)}
