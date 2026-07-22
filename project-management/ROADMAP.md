@@ -31,12 +31,24 @@ distribution friction (Gatekeeper, notarization) entirely.
 
 ## Now
 
-- [ ] Nothing in flight. `main` clean, released through **v2.2.1**. Next up is
-      distribution: notarization (#9) so installs stop fighting Gatekeeper, then
-      the launch post. See the full-app UX audit in [`UX-AUDIT.md`](UX-AUDIT.md).
+- [ ] Nothing in flight. `main` clean, released through **v2.5.0** — the Sessions
+      redesign: title-led rows, two sections (Live & active / Repo graveyard),
+      lifecycle state pills (Concept-B colour), multi-repo badges, an End-session
+      control plane, and scheduled routines hidden. Next up is distribution:
+      notarization (#9) so installs stop fighting Gatekeeper, then the launch
+      post. See the full-app UX audit in [`UX-AUDIT.md`](UX-AUDIT.md).
 
 ## Next
 
+- [ ] **Archive a session** — a reversible "retire this from my view" for the
+      Repo graveyard, without the permanence of deleting a transcript. Today
+      *End* (SIGTERM) stops a running process but the session lingers as
+      `finished`; there's no way to clear a done session you're through with.
+      Archive = mark it hidden in Orrery's local state (the `.jsonl` transcript
+      stays on disk, un-destroyed) with a "show archived" toggle to bring it
+      back. This is the honest answer to "can I delete this?" — soft, reversible,
+      and it keeps Orrery's read-only-of-your-exhaust ethos intact rather than
+      adding a hard-delete. *(Raised while dogfooding v2.5.0's End control.)*
 - [ ] **Uncloned repos can't be grouped or annotated**
       ([#40](https://github.com/jokeane9/orrery/issues/40)) — `resolve.overrides()`
       matches by path, so an uncloned repo can never take a manual group. Found
