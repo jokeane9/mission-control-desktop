@@ -1338,8 +1338,12 @@ def sessions_html(sessions, sources_present=None):
     a pill (selecting it shows an honest empty), so "quiet" is distinct from
     "not installed". Defaults to whatever produced rows (back-compat)."""
     esc = html.escape
-    live = [s for s in sessions if s["active"]]
-    ghosts = [s for s in sessions if s["worktree_live"] and not s["active"]]
+    # running = a registered, still-alive process (the fact the rows now show);
+    # active is the old 30-min activity guess. Headline the fact so the subtitle
+    # agrees with the row badges — and don't call a running session's worktree a
+    # ghost, since it hasn't been abandoned yet.
+    running = [s for s in sessions if s.get("running")]
+    ghosts = [s for s in sessions if s["worktree_live"] and not s.get("running")]
     present = list(sources_present
                    or sorted({s.get("source") or "claude" for s in sessions}))
     # per-tool counts for the subtitle, in a stable order
@@ -1352,7 +1356,7 @@ def sessions_html(sessions, sources_present=None):
     sub = (f'{len(sessions)} session{"s" if len(sessions) != 1 else ""} · '
            f'last {SESSIONS_DAYS} days'
            + (f' · {bysrc}' if bysrc and len(present) > 1 else "")
-           + (f' · {len(live)} live' if live else "")
+           + (f' · {len(running)} running' if running else "")
            + (f' · {len(ghosts)} left a worktree behind' if ghosts else ""))
     out = [f'''<div class="dhead"><span class="dname">Sessions</span>
     <span class="dthesis">{esc(sub) if sessions else "no recent sessions"}</span></div>''']

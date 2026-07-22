@@ -495,6 +495,24 @@ def test_end_session_terminates_registered_pid():
         shutil.rmtree(base, ignore_errors=True)
 
 
+def test_html_subtitle_counts_running_not_just_active():
+    def rec(sid, running, active, pid=0):
+        return {"id": sid, "source": "claude", "repo": "app", "cwd": "/r",
+                "branch": "main", "branches": [], "files": [], "dirs": [],
+                "prs": [], "tools": {}, "started": "", "ended": "",
+                "age_min": 5 if active else 5000, "mins": 1, "msgs": 1,
+                "tokens": 10, "worktree": "", "worktree_live": False,
+                "active": active, "running": running, "pid": pid}
+    rows = [rec("aaaa", True, True, 111),     # running + active
+            rec("bbbb", True, False, 222),    # running but quiet — the case the
+                                              # old 'active' count made invisible
+            rec("cccc", False, False)]        # finished
+    h = V.sessions_html(rows)
+    assert "2 running" in h                   # both live processes, not just the active one
+    assert h.count("&#9209; End") == 2        # End control on exactly the running rows
+    assert h.count(">running</span>") == 2    # and both carry the running label
+
+
 if __name__ == "__main__":
     fails = 0
     for fn in sorted(k for k in list(globals()) if k.startswith("test_")):
