@@ -594,6 +594,46 @@ def test_pr_overflow_shows_plus_n_more_never_drops():
         shutil.rmtree(base, ignore_errors=True)
 
 
+def test_scheduled_routines_are_filtered_out():
+    """A session whose title matches a configured scheduled-routine slug is a
+    routine, not interactive work — dropped from the view (managed in Claude
+    Code). A normal session, and one with no title, both stay."""
+    base, claude, repo, cache = workspace()
+    try:
+        os.makedirs(os.path.join(claude, "scheduled-tasks", "fix-article-twice-weekly"))
+        d = os.path.join(claude, "projects", "-app")
+        os.makedirs(d)
+
+        def tx(sid, title):
+            with open(os.path.join(d, f"{sid}.jsonl"), "w") as f:
+                f.write(json.dumps({"type": "user", "cwd": repo, "gitBranch": "main",
+                                    "timestamp": ts(1), "message": {"content": "x"}}) + "\n")
+                if title:
+                    f.write(json.dumps({"type": "custom-title", "sessionId": sid,
+                                        "customTitle": title}) + "\n")
+                f.write(json.dumps({"type": "assistant", "cwd": repo, "timestamp": ts(0),
+                                    "message": {"content": "x", "id": sid + "m",
+                                                "usage": {"input_tokens": 1, "output_tokens": 1,
+                                                          "cache_creation_input_tokens": 0,
+                                                          "cache_read_input_tokens": 0}}}) + "\n")
+        tx("rout0001", "Fix article twice weekly")   # matches the routine slug -> dropped
+        tx("work0001", "Refactor the auth module")   # real interactive work -> kept
+        tx("bare0001", "")                            # no title -> never matches -> kept
+        secs = V.collect_sessions([("app", repo)], cache, claude_dir=claude)
+        titles = {s.get("title") for s in secs}
+        assert "Fix article twice weekly" not in titles
+        assert "Refactor the auth module" in titles
+        assert len(secs) == 2
+    finally:
+        shutil.rmtree(base, ignore_errors=True)
+
+
+def test_norm_routine_folds_case_and_separators():
+    assert V._norm_routine("Fix article twice weekly") == "fix-article-twice-weekly"
+    assert V._norm_routine("fix-article-twice-weekly") == "fix-article-twice-weekly"
+    assert V._norm_routine("") == ""
+
+
 def test_cross_repo_prs_are_tagged_and_badged():
     """A session whose PRs land in another repo names that repo — as a badge on
     the row and a tag on the PR chip — so cross-repo work (e.g. #226 in
