@@ -48,6 +48,21 @@ class Api:
             _log_exc("refresh")
             return False
 
+    def end_session(self, pid):
+        """End a live Claude Code session (SIGTERM → clean exit → Claude removes
+        its own worktree). The actual whitelist + signal lives in
+        views.end_session so it's unit-testable without pulling in webview; the
+        bridge just regenerates on success so the row updates on reload. The
+        exit is async, so a same-instant reload may still show it running for a
+        beat — the page's optimistic UI covers that gap."""
+        r = views.end_session(pid)
+        if r.get("ok"):
+            try:
+                generate.main()
+            except Exception:
+                _log_exc("end_session regen")
+        return r
+
     def save_project(self, project, original=None):
         """Add or update one project, then regenerate. Returns
         {ok, error} so the editor can show a message instead of failing silently."""

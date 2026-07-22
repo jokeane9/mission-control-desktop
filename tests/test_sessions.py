@@ -12,7 +12,7 @@ Two of these guard things that fail SILENTLY and badly:
 
 Stdlib only; run: python tests/test_sessions.py
 """
-import datetime, json, os, shutil, sys, tempfile
+import datetime, json, os, shutil, subprocess, sys, tempfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
@@ -423,6 +423,75 @@ def test_malformed_transcript_never_raises():
         open(os.path.join(d, "bad.jsonl"), "w").write("{not json\n\n{}\n")
         assert V.collect_sessions([("app", repo)], cache, claude_dir=claude) == []
     finally:
+        shutil.rmtree(base, ignore_errors=True)
+
+
+# --- live-process registry + end-session control plane --------------------- #
+def _mkreg(claude, sid, pid):
+    """Write one ~/.claude/sessions/<pid>.json live-registry entry."""
+    d = os.path.join(claude, "sessions")
+    os.makedirs(d, exist_ok=True)
+    with open(os.path.join(d, f"{pid}.json"), "w") as f:
+        json.dump({"pid": pid, "sessionId": sid, "cwd": "/x",
+                   "startedAt": 1, "kind": "interactive"}, f)
+
+
+def _throwaway():
+    """A real child process we own — cross-platform (no `sleep` binary needed)."""
+    return subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)"])
+
+
+def _dead_pid():
+    """A pid that is definitely not running: spawn a child, end it, reap it."""
+    p = _throwaway()
+    p.terminate()
+    p.wait()
+    return p.pid
+
+
+def test_live_registry_keeps_alive_drops_dead():
+    base = tempfile.mkdtemp()
+    claude = os.path.join(base, ".claude")
+    try:
+        _mkreg(claude, "alive-sid", os.getpid())    # this test process — alive
+        _mkreg(claude, "dead-sid", _dead_pid())      # stale file, pid gone
+        reg = V._live_registry(claude)
+        assert "alive-sid" in reg and reg["alive-sid"]["pid"] == os.getpid()
+        assert "dead-sid" not in reg                 # verified against the OS, not trusted
+    finally:
+        shutil.rmtree(base, ignore_errors=True)
+
+
+def test_end_session_refuses_unregistered_pid():
+    base = tempfile.mkdtemp()
+    claude = os.path.join(base, ".claude")
+    try:
+        _mkreg(claude, "sid", _dead_pid())           # registry owns some pid
+        other = _dead_pid()                          # a different, unregistered pid
+        r = V.end_session(other, claude_dir=claude)  # must be refused, no signal
+        assert r["ok"] is False and "no longer running" in r["error"]
+        r2 = V.end_session("not-a-number", claude_dir=claude)
+        assert r2["ok"] is False and "Invalid" in r2["error"]
+    finally:
+        shutil.rmtree(base, ignore_errors=True)
+
+
+def test_end_session_terminates_registered_pid():
+    base = tempfile.mkdtemp()
+    claude = os.path.join(base, ".claude")
+    proc = _throwaway()
+    try:
+        _mkreg(claude, "sid", proc.pid)
+        assert V._pid_alive(proc.pid)
+        r = V.end_session(proc.pid, claude_dir=claude)
+        assert r["ok"] is True, r
+        proc.wait(timeout=5)                         # SIGTERM should stop it
+        assert proc.poll() is not None and not V._pid_alive(proc.pid)
+    finally:
+        try:
+            proc.kill()
+        except Exception:
+            pass
         shutil.rmtree(base, ignore_errors=True)
 
 

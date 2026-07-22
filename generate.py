@@ -756,6 +756,16 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--mono);font
 .wtchip{font-size:9.5px;color:var(--muted);background:var(--panel2);
   border:1px solid var(--border2);border-radius:9px;padding:1px 7px}
 .wtchip.amber{color:var(--amber);border-color:var(--amber)}
+/* end-session control — shown only on running rows (the control plane) */
+.endwrap{margin-left:auto;display:inline-flex;gap:6px;align-items:center}
+.endbtn{font:inherit;font-size:9.5px;color:var(--faint);background:transparent;
+  border:1px solid var(--border2);border-radius:9px;padding:1px 8px;cursor:pointer}
+.endbtn:hover{color:#ff6b6b;border-color:#5a2626;background:#241414}
+.endconf{display:none;gap:6px;align-items:center;font-size:9.5px;color:var(--faint)}
+.endconf.on{display:inline-flex}
+.endconf b{color:#ff6b6b;cursor:pointer;font-weight:700}
+.endconf .endno{color:var(--muted);cursor:pointer}
+.endconf .endno:hover{color:var(--ink)}
 /* session source tag — tool identity (Claude blue, Cursor purple) */
 .ssrc{font-size:9px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
   padding:1px 6px;border-radius:4px;border:1px solid;flex:none}
@@ -1054,6 +1064,25 @@ function refreshGit(btn){
   if(window.pywebview&&window.pywebview.api&&window.pywebview.api.refresh){
     window.pywebview.api.refresh().then(reload).catch(reload);
   } else { reload(); }
+}
+// --- end a live session (control plane). Two-step confirm, then the bridge. ---
+function endAsk(btn){var w=btn.closest('.endwrap');btn.style.display='none';
+  w.querySelector('.endconf').classList.add('on');}
+function endNo(x){var w=x.closest('.endwrap');w.querySelector('.endconf').classList.remove('on');
+  w.querySelector('.endbtn').style.display='';}
+function endGo(x,pid){
+  var w=x.closest('.endwrap'),row=x.closest('.wtrow'),c=w.querySelector('.endconf');
+  c.innerHTML='<span style="color:var(--amber)">ending…</span>';
+  function done(ok,msg){
+    if(ok){row.style.opacity='.5';
+      var v=row.querySelector('.wtverdict');if(v){v.className='wtage';v.textContent='ended';}
+      c.innerHTML='<span style="color:var(--faint)">✓ ended</span>';
+    } else { c.innerHTML='<span style="color:#ff6b6b">'+(msg||'failed')+'</span>'; }
+  }
+  if(window.pywebview&&window.pywebview.api&&window.pywebview.api.end_session){
+    window.pywebview.api.end_session(pid).then(function(r){done(r&&r.ok,r&&r.error);})
+      .catch(function(){done(false,'bridge error');});
+  } else { done(false,'Needs the desktop app.'); }
 }
 document.addEventListener('keydown',function(e){
   if(!(e.metaKey||e.ctrlKey))return;
