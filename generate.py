@@ -743,6 +743,7 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--mono);font
 .wtrow{padding:7px 0;border-top:1px solid var(--border)}
 .wtmain{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}
 .wtname{font-size:12px;font-weight:700;color:var(--ink)}
+.wtsid{font-size:9.5px;color:var(--faintline);font-weight:400}  /* secondary UUID when a title leads */
 .wtbranch{font-size:10.5px;color:var(--blue)}
 .wtbranch.det{color:var(--amber)}
 .wtage{font-size:10px;color:var(--faint)}
