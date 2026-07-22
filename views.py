@@ -1298,6 +1298,25 @@ def default_sources(cache_path, claude_dir=CLAUDE_DIR, cursor_db=CURSOR_DB):
     return sources
 
 
+def _norm_routine(s):
+    """Fold a name to a comparable slug: 'Fix article twice weekly' and
+    'fix-article-twice-weekly' both become 'fix-article-twice-weekly'."""
+    return re.sub(r"[^a-z0-9]+", "-", (s or "").lower()).strip("-")
+
+
+def _routine_names(claude_dir=CLAUDE_DIR):
+    """The user's scheduled-routine slugs, from ~/.claude/scheduled-tasks/<name>/.
+    A session whose title matches one is a routine run (or routine dev work), not
+    the interactive session Orrery is for — it's filtered out; routines are
+    managed in Claude Code's own scheduled-task surface, not here."""
+    d = os.path.join(claude_dir, "scheduled-tasks")
+    try:
+        return {_norm_routine(n) for n in os.listdir(d)
+                if os.path.isdir(os.path.join(d, n))}
+    except OSError:
+        return set()
+
+
 def collect_sessions(project_dirs, cache_path, claude_dir=CLAUDE_DIR,
                      days=SESSIONS_DAYS, sources=None):
     """[{id, source, repo, cwd, branch, …, worktree_live, active}, …] — agent
@@ -1322,6 +1341,12 @@ def collect_sessions(project_dirs, cache_path, claude_dir=CLAUDE_DIR,
         except Exception:
             pass                            # a flaky source never blanks the view
     out.sort(key=lambda s: s["age_min"])
+    # Drop scheduled routines — they're managed in Claude Code, not here. Matched
+    # by title against the configured routine slugs; sessions without a title
+    # (empty slug) never match.
+    routines = _routine_names(claude_dir)
+    if routines:
+        out = [s for s in out if _norm_routine(s.get("title", "")) not in routines]
     return out
 
 
