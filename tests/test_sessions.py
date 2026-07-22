@@ -573,6 +573,9 @@ def test_two_sections_split_running_from_done():
     assert 'class="sstate amber"' not in h             # nothing stuck here
     # the running one carries a green (alive) pill; done ones are grey/at-rest
     assert 'class="sstate green"' in h
+    # the flat live row states its home repo; graveyard rows (grouped) do not
+    assert h.count('class="wtrepo home"') == 1
+    assert 'class="wtrepo home">alpha<' in h
 
 
 def test_pr_overflow_shows_plus_n_more_never_drops():
