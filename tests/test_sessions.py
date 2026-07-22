@@ -537,22 +537,42 @@ def test_session_without_custom_title_falls_back_to_id():
         shutil.rmtree(base, ignore_errors=True)
 
 
+def _rec(sid, running, age_min, pid=0, **kw):
+    r = {"id": sid, "title": "", "source": "claude", "repo": "app", "cwd": "/r",
+         "branch": "main", "branches": [], "files": [], "dirs": [],
+         "prs": [], "tools": {}, "started": "", "ended": "",
+         "age_min": age_min, "mins": 1, "msgs": 1, "tokens": 10, "worktree": "",
+         "worktree_live": False, "active": age_min <= 30, "running": running, "pid": pid}
+    r.update(kw)
+    return r
+
+
 def test_html_subtitle_counts_running_not_just_active():
-    def rec(sid, running, active, pid=0):
-        return {"id": sid, "title": "", "source": "claude", "repo": "app", "cwd": "/r",
-                "branch": "main", "branches": [], "files": [], "dirs": [],
-                "prs": [], "tools": {}, "started": "", "ended": "",
-                "age_min": 5 if active else 5000, "mins": 1, "msgs": 1,
-                "tokens": 10, "worktree": "", "worktree_live": False,
-                "active": active, "running": running, "pid": pid}
-    rows = [rec("aaaa", True, True, 111),     # running + active
-            rec("bbbb", True, False, 222),    # running but quiet — the case the
-                                              # old 'active' count made invisible
-            rec("cccc", False, False)]        # finished
+    rows = [_rec("aaaa", True, 2, 111),      # running, live
+            _rec("bbbb", True, 200, 222),    # running but quiet -> idle (was invisible
+                                             # to the old 'active' count)
+            _rec("cccc", False, 5000)]       # finished, in the graveyard
     h = V.sessions_html(rows)
-    assert "2 running" in h                   # both live processes, not just the active one
-    assert h.count("&#9209; End") == 2        # End control on exactly the running rows
-    assert h.count(">running</span>") == 2    # and both carry the running label
+    assert "2 running" in h                  # subtitle counts both live processes
+    assert h.count("&#9209; End") == 2       # End control on both running rows
+    assert "Live &amp; active" in h and "Repo graveyard" in h
+    assert ">live</span>" in h and ">idle</span>" in h   # lifecycle pills, not a flat label
+
+
+def test_two_sections_split_running_from_done():
+    """Running sessions land in Live & active (flat, cross-repo); non-running
+    ones in the Repo graveyard grouped by home repo."""
+    rows = [_rec("run1", True, 3, 11, repo="alpha"),
+            _rec("don1", False, 100, repo="alpha"),
+            _rec("don2", False, 200, repo="beta")]
+    h = V.sessions_html(rows)
+    # graveyard groups by repo → both repo headers present, live section present
+    assert "Live &amp; active" in h and "Repo graveyard" in h
+    assert h.index("Live &amp; active") < h.index("Repo graveyard")   # order: now → history
+    assert ">alpha<" in h and ">beta<" in h            # graveyard repo group headers
+    assert 'class="sstate amber"' not in h             # nothing stuck here
+    # the running one carries a green (alive) pill; done ones are grey/at-rest
+    assert 'class="sstate green"' in h
 
 
 def test_pr_overflow_shows_plus_n_more_never_drops():

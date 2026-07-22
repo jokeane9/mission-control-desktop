@@ -598,6 +598,9 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--mono);font
 .sname{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dot{width:6px;height:6px;border-radius:50%;flex:none}
 .dot.green{background:var(--green)}.dot.amber{background:var(--amber)}.dot.dim{background:var(--border2)}
+.dot.live{box-shadow:0 0 0 0 rgba(63,185,80,.5);animation:opulse 1.9s infinite}
+@keyframes opulse{0%{box-shadow:0 0 0 0 rgba(63,185,80,.5)}70%{box-shadow:0 0 0 5px rgba(63,185,80,0)}100%{box-shadow:0 0 0 0 rgba(63,185,80,0)}}
+@media (prefers-reduced-motion:reduce){.dot.live{animation:none}}
 .scount{font-size:10px;color:var(--amber);border:1px solid #4d3800;background:#2a2100;
   border-radius:8px;padding:0 6px}
 .skey{font-size:9px;color:var(--faint)}
@@ -780,6 +783,20 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--mono);font
 a.wtchip.pr{color:var(--blue);border-color:var(--border2);text-decoration:none}
 a.wtchip.pr:hover{border-color:var(--blue)}
 .wtchip.more{color:var(--faint);cursor:default}   /* "+N more" PR overflow */
+/* two-section layout headers + Concept-B lifecycle state pills */
+.ssec{display:flex;align-items:baseline;gap:9px;margin:2px 0 8px}
+.ssec.grave{margin-top:22px;border-top:1px solid var(--border);padding-top:14px}
+.ssectl{font-size:10.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--ink)}
+.ssectl.live{color:var(--green)}
+.ssectl.grave{color:var(--faint)}
+.sseccount{font-size:9.5px;color:var(--faint)}
+.sstate{font-size:9.5px;font-weight:700;letter-spacing:.02em;margin-left:auto;white-space:nowrap;
+  padding:0 7px;border-radius:9px;border:1px solid transparent}   /* green=alive, amber=needs you, grey=rest */
+.sstate.green{color:var(--green)}
+.sstate.amber{color:var(--amber);background:#231a06;border-color:#4d3800}
+.sstate.grey{color:var(--faint)}
+.sstate.dim{color:var(--faintline)}
+.sstate + .wtage{margin-left:6px}
 /* session footprint — the identity line: files edited, then dirs worked in */
 .sffiles{color:var(--muted)}
 .sfdirs{color:var(--faint)}

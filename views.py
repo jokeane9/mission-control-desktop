@@ -915,6 +915,8 @@ def worktrees_html(worktrees):
 SESSIONS_DAYS = 30              # history window for the view
 SESSION_ACTIVE_MIN = 30         # last activity within this → still live
 _PR_SHOWN = 6                   # PR chips shown inline before a "+N more" overflow
+_STUCK_MIN = 8 * 60             # running but idle beyond this → possibly stuck
+_STALE_MIN = 24 * 60           # process gone and older than this → stale (vs finished)
 
 
 def _pid_alive(pid):
@@ -1342,6 +1344,28 @@ def _knum(n):
 _SOURCE_LABEL = {"claude": "Claude", "cursor": "Cursor"}
 
 
+def _lifecycle(s):
+    """(key, label, cls) for a session — the single source of truth for which
+    SECTION it lands in and which PILL it shows. Two orthogonal inputs: is the
+    process alive (running), and how long since last activity (age_min).
+
+    Colour class follows Concept-B discipline — green = alive, amber = needs you,
+    grey/dim = at rest — so the whole view reads with two meaningful hues, not a
+    rainbow. `running` states sit in "Live & active"; the rest in the graveyard."""
+    age = s.get("age_min", 10 ** 9)
+    if s.get("running"):
+        if age <= 5:
+            return ("live", "live", "green")
+        if age <= SESSION_ACTIVE_MIN:
+            return ("active", "active", "green")
+        if age <= _STUCK_MIN:
+            return ("idle", "idle", "grey")
+        return ("stuck", "possibly stuck", "amber")
+    if age <= _STALE_MIN:
+        return ("finished", "finished", "grey")
+    return ("stale", "stale", "dim")
+
+
 def sessions_html(sessions, sources_present=None):
     """The Sessions view body: one row per session, newest first, grouped by repo,
     each tagged by the tool that produced it. Metadata only — no prompt or
@@ -1396,130 +1420,124 @@ def sessions_html(sessions, sources_present=None):
             'never prompts.</span></div>')
         return "".join(out)
 
-    by_repo = {}
-    for s in sessions:
-        by_repo.setdefault(s["repo"], []).append(s)
+    def render_row(s):
+        # Lifecycle drives both the dot and the pill (Concept-B colour: green =
+        # alive, amber = needs you, grey/dim = at rest).
+        key, label, cls = _lifecycle(s)
+        dotcls = "amber" if cls == "amber" else ("green" if cls == "green" else "dim")
+        dot = f'<span class="dot {dotcls}{" live" if key == "live" else ""}"></span>'
+        branches = s.get("branches") or []
+        files, sdirs, prs = (s.get("files") or [], s.get("dirs") or [],
+                             s.get("prs") or [])
+        # Branch: one inline; several collapse to a hover-listing count.
+        if len(branches) > 1:
+            branch = (f'<span class="wtbranch" title="'
+                      + esc("  ".join(branches), quote=True) + '">'
+                      + f'{len(branches)} branches</span>')
+        elif s["branch"]:
+            branch = f'<span class="wtbranch">{esc(s["branch"])}</span>'
+        else:
+            branch = ""
+        # The footprint line — what the session DID, so the row has identity.
+        fp = []
+        if files:
+            shown = ", ".join(esc(f) for f in files[:3])
+            extra = len(files) - 3
+            fp.append(f'<span class="sffiles">{shown}'
+                      + (f' +{extra}' if extra > 0 else "") + '</span>')
+        if sdirs:
+            fp.append('<span class="sfdirs">'
+                      + " ".join(esc(d) + "/" for d in sdirs[:4]) + '</span>')
+        footline = " · ".join(fp) if fp else f'<span class="sfnone">{esc(s["cwd"])}</span>'
+        # Repos this session ALSO touched beyond home — from the PRs' prRepository.
+        home = s["repo"]
+        extra_repos = []
+        for p in prs:
+            rr = (p.get("repo") or "").rsplit("/", 1)[-1]
+            if rr and rr != home and rr not in extra_repos:
+                extra_repos.append(rr)
+        repos_html = "".join(
+            f'<span class="wtrepo" title="also touched this repo">{esc(r)}</span>'
+            for r in extra_repos)
+        chips = []
+        if s["msgs"]:
+            chips.append(f'<span class="wtchip">{s["msgs"]} msgs</span>')
+        if s["tokens"]:
+            chips.append(f'<span class="wtchip">{_knum(s["tokens"])} tokens</span>')
+        if s["mins"]:
+            chips.append(f'<span class="wtchip">{_ago(s["mins"]).replace(" ago", "")}</span>')
+        for p in prs[:_PR_SHOWN]:            # click straight through to the PR
+            url = esc(p.get("url") or "", quote=True)
+            rr = (p.get("repo") or "").rsplit("/", 1)[-1]
+            plabel = "PR #" + esc(p.get("num", "?"))
+            if rr and rr != home:           # cross-repo PR: name its repo
+                plabel += f' <span class="rp">{esc(rr)}</span>'
+            chips.append(f'<a class="wtchip pr" href="{url}" target="_blank">{plabel}</a>'
+                         if url else f'<span class="wtchip">{plabel}</span>')
+        if len(prs) > _PR_SHOWN:            # never silently drop PRs
+            rest = prs[_PR_SHOWN:]
+            more = "  ".join("PR #" + str(p.get("num", "?")) for p in rest)
+            chips.append(f'<span class="wtchip more" title="{esc(more, quote=True)}">'
+                         f'+{len(rest)} more</span>')
+        if s["worktree_live"]:
+            chips.append('<span class="wtchip amber" title="' +
+                         esc(s["worktree"], quote=True) +
+                         '">left a worktree</span>')
+        # Lifecycle pill — Concept-B colour; append the age for at-rest/quiet ones.
+        pill = f'<span class="sstate {cls}">{esc(label)}</span>'
+        if key in ("finished", "stale"):
+            pill += f'<span class="wtage">{esc(_ago(s["age_min"]))}</span>'
+        elif key in ("idle", "stuck"):
+            pill += f'<span class="wtage">{esc(_ago(s["age_min"]).replace(" ago", ""))}</span>'
+        # Control plane: end a live session — only a real process we can signal.
+        endctl = ""
+        if s.get("running") and s.get("pid"):
+            endctl = (
+                '<span class="endwrap">'
+                '<button class="endbtn" onclick="endAsk(this)" '
+                'title="End this session — SIGTERM, so Claude exits cleanly '
+                'and removes its worktree">&#9209; End</button>'
+                '<span class="endconf">end?&nbsp;'
+                f'<b onclick="endGo(this,{int(s["pid"])})">yes</b>&nbsp;'
+                '<span class="endno" onclick="endNo(this)">no</span></span>'
+                '</span>')
+        src = s.get("source") or "claude"
+        tag = (f'<span class="ssrc {esc(src)}">{esc(_SOURCE_LABEL.get(src, src))}</span>')
+        # Lead with the human title; the UUID drops to a small secondary id.
+        if s.get("title"):
+            name = (f'<span class="wtname">{esc(s["title"])}</span>'
+                    f'<span class="wtsid">{esc(s["id"])}</span>')
+        else:
+            name = f'<span class="wtname">{esc(s["id"])}</span>'
+        return (f'<div class="wtrow" data-src="{esc(src)}">'
+                f'<div class="wtmain">{dot}{tag}{name}{repos_html}{branch}{pill}</div>'
+                f'<div class="wtpath" title="{esc(s["cwd"], quote=True)}">{footline}</div>'
+                f'<div class="wtchips">{"".join(chips)}{endctl}</div>'
+                f'</div>')
 
-    for repo, rows in by_repo.items():
-        body = []
-        for s in rows:
-            # Green dot = a live process. running (registered + alive) OR active
-            # (recent transcript activity) both count as alive right now.
-            dot = ('<span class="dot green"></span>'
-                   if (s.get("running") or s["active"])
-                   else '<span class="dot dim"></span>')
-            # Footprint fields via .get(): a hand-built row or a pre-v4 cache
-            # entry may not carry them, and the renderer shouldn't crash on that.
-            branches = s.get("branches") or []
-            files, sdirs, prs = (s.get("files") or [], s.get("dirs") or [],
-                                 s.get("prs") or [])
-            # Branch: one shows inline; several collapse to a hover-listing count,
-            # since a heavy session can span ten branches.
-            if len(branches) > 1:
-                branch = (f'<span class="wtbranch" title="'
-                          + esc("  ".join(branches), quote=True) + '">'
-                          + f'{len(branches)} branches</span>')
-            elif s["branch"]:
-                branch = f'<span class="wtbranch">{esc(s["branch"])}</span>'
-            else:
-                branch = ""
+    # Two axes: "Live & active" (running processes, cross-repo, most-recent-active
+    # first) up top; a "Repo graveyard" (finished/dead, grouped by home repo) below.
+    live_active = sorted((s for s in sessions if s.get("running")),
+                         key=lambda s: s.get("age_min", 10 ** 9))
+    done = [s for s in sessions if not s.get("running")]
 
-            # The footprint line — what the session DID, so the row has identity.
-            fp = []
-            if files:
-                shown = ", ".join(esc(f) for f in files[:3])
-                extra = len(files) - 3
-                fp.append(f'<span class="sffiles">{shown}'
-                          + (f' +{extra}' if extra > 0 else "") + '</span>')
-            if sdirs:
-                fp.append('<span class="sfdirs">'
-                          + " ".join(esc(d) + "/" for d in sdirs[:4]) + '</span>')
-            # No edits → a read/plan session; show where it ran instead of blank.
-            footline = " · ".join(fp) if fp else f'<span class="sfnone">{esc(s["cwd"])}</span>'
+    if live_active:
+        out.append('<div class="ssec"><span class="ssectl live">Live &amp; active</span>'
+                   f'<span class="sseccount">{len(live_active)}</span></div>'
+                   '<div class="sgroup" data-sessgroup>'
+                   + "".join(render_row(s) for s in live_active) + '</div>')
 
-            # Repos this session ALSO touched beyond its home folder — evidenced by
-            # PRs opened in another repo (prRepository). This is what fixes cross-
-            # repo PRs (e.g. #226/#227) surfacing under the "wrong" project card:
-            # the row now names every repo it reached, not just where it launched.
-            home = s["repo"]
-            extra_repos = []
-            for p in prs:
-                rr = (p.get("repo") or "").rsplit("/", 1)[-1]
-                if rr and rr != home and rr not in extra_repos:
-                    extra_repos.append(rr)
-            repos_html = "".join(
-                f'<span class="wtrepo" title="also touched this repo">{esc(r)}</span>'
-                for r in extra_repos)
+    if done:
+        out.append('<div class="ssec grave"><span class="ssectl grave">Repo graveyard</span>'
+                   f'<span class="sseccount">{len(done)} finished</span></div>')
+        by_repo = {}
+        for s in done:
+            by_repo.setdefault(s["repo"], []).append(s)
+        for repo, rows in by_repo.items():
+            out.append('<div class="sgroup" data-sessgroup>'
+                       f'<div class="sgtitle">{esc(repo)}<span class="wtcount">{len(rows)}</span></div>'
+                       + "".join(render_row(s) for s in rows) + '</div>')
 
-            chips = []
-            if s["msgs"]:
-                chips.append(f'<span class="wtchip">{s["msgs"]} msgs</span>')
-            if s["tokens"]:
-                chips.append(f'<span class="wtchip">{_knum(s["tokens"])} tokens</span>')
-            if s["mins"]:
-                chips.append(f'<span class="wtchip">{_ago(s["mins"]).replace(" ago", "")}</span>')
-            for p in prs[:_PR_SHOWN]:            # click straight through to the PR
-                url = esc(p.get("url") or "", quote=True)
-                rr = (p.get("repo") or "").rsplit("/", 1)[-1]
-                label = "PR #" + esc(p.get("num", "?"))
-                if rr and rr != home:           # cross-repo PR: name its repo
-                    label += f' <span class="rp">{esc(rr)}</span>'
-                chips.append(f'<a class="wtchip pr" href="{url}" target="_blank">{label}</a>'
-                             if url else f'<span class="wtchip">{label}</span>')
-            # Overflow: never silently drop PRs — a "+N more" chip names the count
-            # and lists the rest on hover, so nothing looks lost off the end.
-            if len(prs) > _PR_SHOWN:
-                rest = prs[_PR_SHOWN:]
-                more = "  ".join("PR #" + str(p.get("num", "?")) for p in rest)
-                chips.append(f'<span class="wtchip more" title="{esc(more, quote=True)}">'
-                             f'+{len(rest)} more</span>')
-            # The join that makes this view worth building.
-            if s["worktree_live"]:
-                chips.append('<span class="wtchip amber" title="' +
-                             esc(s["worktree"], quote=True) +
-                             '">left a worktree</span>')
-            # running = a registered, still-alive process (a fact); "live" =
-            # recent activity (a 30-min guess). Prefer the fact when we have it.
-            if s.get("running"):
-                state = '<span class="wtverdict ok">running</span>'
-            elif s["active"]:
-                state = '<span class="wtverdict ok">live</span>'
-            else:
-                state = f'<span class="wtage">{esc(_ago(s["age_min"]))}</span>'
-            # Control plane: end a live session — only when it's a real process we
-            # can signal. Two-step confirm; the click calls the bridge (app.py).
-            endctl = ""
-            if s.get("running") and s.get("pid"):
-                endctl = (
-                    '<span class="endwrap">'
-                    '<button class="endbtn" onclick="endAsk(this)" '
-                    'title="End this session — SIGTERM, so Claude exits cleanly '
-                    'and removes its worktree">&#9209; End</button>'
-                    '<span class="endconf">end?&nbsp;'
-                    f'<b onclick="endGo(this,{int(s["pid"])})">yes</b>&nbsp;'
-                    '<span class="endno" onclick="endNo(this)">no</span></span>'
-                    '</span>')
-            # Source tag: tool identity, first on the row. Dot=state, tag=tool —
-            # two orthogonal channels, never overloaded onto one mark.
-            src = s.get("source") or "claude"
-            tag = (f'<span class="ssrc {esc(src)}">{esc(_SOURCE_LABEL.get(src, src))}</span>')
-            # Lead with the human title when the session has one; the UUID drops
-            # to a small secondary id. No title → the id leads, as before, and the
-            # footprint line below still carries the "what it did" identity.
-            if s.get("title"):
-                name = (f'<span class="wtname">{esc(s["title"])}</span>'
-                        f'<span class="wtsid">{esc(s["id"])}</span>')
-            else:
-                name = f'<span class="wtname">{esc(s["id"])}</span>'
-            body.append(f'''<div class="wtrow" data-src="{esc(src)}">
-  <div class="wtmain">{dot}{tag}{name}{repos_html}{branch}{state}</div>
-  <div class="wtpath" title="{esc(s["cwd"], quote=True)}">{footline}</div>
-  <div class="wtchips">{"".join(chips)}{endctl}</div>
-</div>''')
-        out.append(f'''<div class="sgroup" data-sessgroup>
-  <div class="sgtitle">{esc(repo)}<span class="wtcount">{len(rows)}</span></div>
-  {"".join(body)}
-</div>''')
     if ghosts:
         out.append('<div class="wthint">Sessions marked <b>left a worktree</b> ended '
                    'without cleaning up — the folder is still on disk. See the '
