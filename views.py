@@ -914,6 +914,7 @@ def worktrees_html(worktrees):
 # --------------------------------------------------------------------------- #
 SESSIONS_DAYS = 30              # history window for the view
 SESSION_ACTIVE_MIN = 30         # last activity within this → still live
+_PR_SHOWN = 6                   # PR chips shown inline before a "+N more" overflow
 
 
 def _pid_alive(pid):
@@ -1443,11 +1444,18 @@ def sessions_html(sessions, sources_present=None):
                 chips.append(f'<span class="wtchip">{_knum(s["tokens"])} tokens</span>')
             if s["mins"]:
                 chips.append(f'<span class="wtchip">{_ago(s["mins"]).replace(" ago", "")}</span>')
-            for p in prs[:5]:                    # click straight through to the PR
+            for p in prs[:_PR_SHOWN]:            # click straight through to the PR
                 url = esc(p.get("url") or "", quote=True)
                 label = "PR #" + esc(p.get("num", "?"))
                 chips.append(f'<a class="wtchip pr" href="{url}" target="_blank">{label}</a>'
                              if url else f'<span class="wtchip">{label}</span>')
+            # Overflow: never silently drop PRs — a "+N more" chip names the count
+            # and lists the rest on hover, so nothing looks lost off the end.
+            if len(prs) > _PR_SHOWN:
+                rest = prs[_PR_SHOWN:]
+                more = "  ".join("PR #" + str(p.get("num", "?")) for p in rest)
+                chips.append(f'<span class="wtchip more" title="{esc(more, quote=True)}">'
+                             f'+{len(rest)} more</span>')
             # The join that makes this view worth building.
             if s["worktree_live"]:
                 chips.append('<span class="wtchip amber" title="' +

@@ -776,6 +776,7 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--mono);font
 .sessfilter .fbtn.cursor.on{border-color:var(--cursor);color:var(--cursor)}
 a.wtchip.pr{color:var(--blue);border-color:var(--border2);text-decoration:none}
 a.wtchip.pr:hover{border-color:var(--blue)}
+.wtchip.more{color:var(--faint);cursor:default}   /* "+N more" PR overflow */
 /* session footprint — the identity line: files edited, then dirs worked in */
 .sffiles{color:var(--muted)}
 .sfdirs{color:var(--faint)}
