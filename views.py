@@ -29,6 +29,7 @@ import html
 import json
 import os
 import re
+import signal
 import subprocess
 import time
 from pathlib import Path
@@ -904,6 +905,93 @@ SESSIONS_DAYS = 30              # history window for the view
 SESSION_ACTIVE_MIN = 30         # last activity within this → still live
 
 
+def _pid_alive(pid):
+    """True if a process with this pid currently exists. Cross-platform on
+    purpose — Orrery ships mac and Windows from one codebase, so an OS call with
+    only a POSIX arm would silently break the Windows build. On POSIX, os.kill(
+    pid, 0) is the idiom: signal 0 sends nothing, it just probes existence. On
+    Windows os.kill only accepts CTRL_* events and raises for 0, so fall back to
+    a tasklist query. Anything ambiguous errs toward 'not alive'."""
+    try:
+        pid = int(pid)
+    except (TypeError, ValueError):
+        return False
+    if pid <= 0:
+        return False
+    if os.name == "nt":
+        try:
+            r = subprocess.run(["tasklist", "/FI", f"PID eq {pid}", "/NH"],
+                               capture_output=True, text=True, timeout=5)
+            return f" {pid} " in r.stdout or f"\t{pid}\t" in r.stdout
+        except Exception:
+            return False
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True             # exists but owned by another user — still alive
+    except OSError:
+        return False
+    return True
+
+
+def _live_registry(claude_dir=CLAUDE_DIR):
+    """{sessionId: {"pid": int, "since": startedAt_ms}} for every Claude Code
+    process registered under ~/.claude/sessions AND actually still alive.
+
+    Claude Code writes one small JSON file per live session here (pid, sessionId,
+    cwd, startedAt, kind, entrypoint) and deletes it on exit — but a crash leaves
+    a stale file, so we verify the pid is really running rather than trusting the
+    file's presence. This is the ONLY source that knows a session is a live
+    PROCESS, as opposed to merely having recent transcript activity: 'active'
+    (below) is a 30-minute guess; 'running' here is a fact."""
+    out = {}
+    for p in glob.glob(os.path.join(claude_dir, "sessions", "*.json")):
+        try:
+            d = json.load(open(p, encoding="utf-8"))
+        except Exception:
+            continue                    # a flaky file never blanks the rest
+        sid, pid = d.get("sessionId"), d.get("pid")
+        if sid and pid is not None and _pid_alive(pid):
+            out[sid] = {"pid": int(pid), "since": d.get("startedAt")}
+    return out
+
+
+def end_session(pid, claude_dir=CLAUDE_DIR):
+    """Terminate a live Claude Code session by pid — Orrery's one destructive
+    act, so it is deliberately narrow. Two guarantees:
+
+    * Whitelisted. We only ever signal a pid the live registry CURRENTLY owns
+      (a registered, still-alive Claude session). A stale or spoofed id can't
+      make us kill an unrelated process — it's rejected before any signal.
+    * Graceful. SIGTERM, never SIGKILL: Claude Code removes its worktree on a
+      CLEAN exit, so the polite signal is also the tidy one — ending a session
+      is how you avoid leaving a ghost checkout behind. (On Windows, `taskkill`
+      without /F is the closest polite equivalent; a console app's clean-exit
+      semantics there are best-effort.)
+
+    Pure: no rendering, no page. Returns {ok, error} so callers never fail
+    silently. app.py regenerates the view on success; the CLI could call this
+    too."""
+    try:
+        pid = int(pid)
+    except (TypeError, ValueError):
+        return {"ok": False, "error": "Invalid session id."}
+    owned = {i["pid"] for i in _live_registry(claude_dir).values()}
+    if pid not in owned:
+        return {"ok": False, "error": "That session is no longer running."}
+    try:
+        if os.name == "nt":
+            subprocess.run(["taskkill", "/PID", str(pid)],
+                           capture_output=True, timeout=10)
+        else:
+            os.kill(pid, signal.SIGTERM)
+    except Exception as e:
+        return {"ok": False, "error": f"Could not end session: {e}"}
+    return {"ok": True, "error": ""}
+
+
 def _iso_local(ts):
     """Transcript timestamp (UTC ISO, 'Z') → local datetime. None if unparseable."""
     try:
@@ -970,6 +1058,8 @@ def _session_record(sid, repo, source, *, cwd="", branch="", branches=(),
         "worktree": wt,
         "worktree_live": bool(live_wts),
         "active": age_min <= SESSION_ACTIVE_MIN,
+        "pid": 0,               # live OS process id, if any — filled by the source
+        "running": False,       # a registered, still-alive process (not just recent)
     }
 
 
@@ -984,6 +1074,7 @@ class ClaudeSource:
 
     def sessions(self, project_dirs, now, cutoff):
         out = []
+        live = _live_registry(self.claude_dir)      # {sessionId: {pid, since}}
         for path, e in _transcripts(self.cache_path, self.claude_dir).items():
             meta = e.get("meta") or {}
             cwd = meta.get("cwd") or ""
@@ -1011,6 +1102,11 @@ class ClaudeSource:
                 start=start, end=end, now=now, worktrees=wts)
             rec["msgs"] = meta.get("msgs") or 0
             rec["tokens"] = sum(tokens)
+            # Join the live-process registry by FULL session id — the record's
+            # id is truncated to 8 chars, too short to match reliably.
+            info = live.get(os.path.splitext(os.path.basename(path))[0])
+            if info:
+                rec["pid"], rec["running"] = info["pid"], True
             out.append(rec)
         return out
 
@@ -1289,7 +1385,10 @@ def sessions_html(sessions, sources_present=None):
     for repo, rows in by_repo.items():
         body = []
         for s in rows:
-            dot = ('<span class="dot green"></span>' if s["active"]
+            # Green dot = a live process. running (registered + alive) OR active
+            # (recent transcript activity) both count as alive right now.
+            dot = ('<span class="dot green"></span>'
+                   if (s.get("running") or s["active"])
                    else '<span class="dot dim"></span>')
             # Footprint fields via .get(): a hand-built row or a pre-v4 cache
             # entry may not carry them, and the renderer shouldn't crash on that.
@@ -1337,8 +1436,27 @@ def sessions_html(sessions, sources_present=None):
                 chips.append('<span class="wtchip amber" title="' +
                              esc(s["worktree"], quote=True) +
                              '">left a worktree</span>')
-            state = ('<span class="wtverdict ok">live</span>' if s["active"]
-                     else f'<span class="wtage">{esc(_ago(s["age_min"]))}</span>')
+            # running = a registered, still-alive process (a fact); "live" =
+            # recent activity (a 30-min guess). Prefer the fact when we have it.
+            if s.get("running"):
+                state = '<span class="wtverdict ok">running</span>'
+            elif s["active"]:
+                state = '<span class="wtverdict ok">live</span>'
+            else:
+                state = f'<span class="wtage">{esc(_ago(s["age_min"]))}</span>'
+            # Control plane: end a live session — only when it's a real process we
+            # can signal. Two-step confirm; the click calls the bridge (app.py).
+            endctl = ""
+            if s.get("running") and s.get("pid"):
+                endctl = (
+                    '<span class="endwrap">'
+                    '<button class="endbtn" onclick="endAsk(this)" '
+                    'title="End this session — SIGTERM, so Claude exits cleanly '
+                    'and removes its worktree">&#9209; End</button>'
+                    '<span class="endconf">end?&nbsp;'
+                    f'<b onclick="endGo(this,{int(s["pid"])})">yes</b>&nbsp;'
+                    '<span class="endno" onclick="endNo(this)">no</span></span>'
+                    '</span>')
             # Source tag: tool identity, first on the row. Dot=state, tag=tool —
             # two orthogonal channels, never overloaded onto one mark.
             src = s.get("source") or "claude"
@@ -1346,7 +1464,7 @@ def sessions_html(sessions, sources_present=None):
             body.append(f'''<div class="wtrow" data-src="{esc(src)}">
   <div class="wtmain">{dot}{tag}<span class="wtname">{esc(s["id"])}</span>{branch}{state}</div>
   <div class="wtpath" title="{esc(s["cwd"], quote=True)}">{footline}</div>
-  <div class="wtchips">{"".join(chips)}</div>
+  <div class="wtchips">{"".join(chips)}{endctl}</div>
 </div>''')
         out.append(f'''<div class="sgroup" data-sessgroup>
   <div class="sgtitle">{esc(repo)}<span class="wtcount">{len(rows)}</span></div>
