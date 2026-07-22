@@ -1437,6 +1437,20 @@ def sessions_html(sessions, sources_present=None):
             # No edits → a read/plan session; show where it ran instead of blank.
             footline = " · ".join(fp) if fp else f'<span class="sfnone">{esc(s["cwd"])}</span>'
 
+            # Repos this session ALSO touched beyond its home folder — evidenced by
+            # PRs opened in another repo (prRepository). This is what fixes cross-
+            # repo PRs (e.g. #226/#227) surfacing under the "wrong" project card:
+            # the row now names every repo it reached, not just where it launched.
+            home = s["repo"]
+            extra_repos = []
+            for p in prs:
+                rr = (p.get("repo") or "").rsplit("/", 1)[-1]
+                if rr and rr != home and rr not in extra_repos:
+                    extra_repos.append(rr)
+            repos_html = "".join(
+                f'<span class="wtrepo" title="also touched this repo">{esc(r)}</span>'
+                for r in extra_repos)
+
             chips = []
             if s["msgs"]:
                 chips.append(f'<span class="wtchip">{s["msgs"]} msgs</span>')
@@ -1446,7 +1460,10 @@ def sessions_html(sessions, sources_present=None):
                 chips.append(f'<span class="wtchip">{_ago(s["mins"]).replace(" ago", "")}</span>')
             for p in prs[:_PR_SHOWN]:            # click straight through to the PR
                 url = esc(p.get("url") or "", quote=True)
+                rr = (p.get("repo") or "").rsplit("/", 1)[-1]
                 label = "PR #" + esc(p.get("num", "?"))
+                if rr and rr != home:           # cross-repo PR: name its repo
+                    label += f' <span class="rp">{esc(rr)}</span>'
                 chips.append(f'<a class="wtchip pr" href="{url}" target="_blank">{label}</a>'
                              if url else f'<span class="wtchip">{label}</span>')
             # Overflow: never silently drop PRs — a "+N more" chip names the count
@@ -1495,7 +1512,7 @@ def sessions_html(sessions, sources_present=None):
             else:
                 name = f'<span class="wtname">{esc(s["id"])}</span>'
             body.append(f'''<div class="wtrow" data-src="{esc(src)}">
-  <div class="wtmain">{dot}{tag}{name}{branch}{state}</div>
+  <div class="wtmain">{dot}{tag}{name}{repos_html}{branch}{state}</div>
   <div class="wtpath" title="{esc(s["cwd"], quote=True)}">{footline}</div>
   <div class="wtchips">{"".join(chips)}{endctl}</div>
 </div>''')

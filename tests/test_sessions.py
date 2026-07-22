@@ -571,6 +571,33 @@ def test_pr_overflow_shows_plus_n_more_never_drops():
         shutil.rmtree(base, ignore_errors=True)
 
 
+def test_cross_repo_prs_are_tagged_and_badged():
+    """A session whose PRs land in another repo names that repo — as a badge on
+    the row and a tag on the PR chip — so cross-repo work (e.g. #226 in
+    wp-diagnostic from a primadigital session) no longer looks misfiled. A PR in
+    the home repo stays untagged."""
+    base, claude, repo, cache = workspace()
+    try:
+        d = os.path.join(claude, "projects", "-primadigital")
+        os.makedirs(d)
+        with open(os.path.join(d, "xr000001.jsonl"), "w") as f:
+            f.write(json.dumps({"type": "user", "cwd": repo, "gitBranch": "main",
+                                "timestamp": ts(1), "message": {"content": "x"}}) + "\n")
+            f.write(json.dumps({"type": "pr-link", "sessionId": "xr000001", "timestamp": ts(0),
+                                "prNumber": "10", "prUrl": "https://github.com/me/primadigital/pull/10",
+                                "prRepository": "me/primadigital"}) + "\n")
+            f.write(json.dumps({"type": "pr-link", "sessionId": "xr000001", "timestamp": ts(0),
+                                "prNumber": "226", "prUrl": "https://github.com/me/wp-diagnostic/pull/226",
+                                "prRepository": "me/wp-diagnostic"}) + "\n")
+        s = V.collect_sessions([("primadigital", repo)], cache, claude_dir=claude)
+        h = V.sessions_html(s)
+        assert 'class="wtrepo"' in h and "wp-diagnostic" in h   # the other repo is badged
+        assert '<span class="rp">wp-diagnostic</span>' in h     # the #226 chip names its repo
+        assert '>PR #10 <span class="rp">' not in h             # the home-repo PR stays untagged
+    finally:
+        shutil.rmtree(base, ignore_errors=True)
+
+
 if __name__ == "__main__":
     fails = 0
     for fn in sorted(k for k in list(globals()) if k.startswith("test_")):
