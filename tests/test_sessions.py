@@ -555,6 +555,22 @@ def test_html_subtitle_counts_running_not_just_active():
     assert h.count(">running</span>") == 2    # and both carry the running label
 
 
+def test_pr_overflow_shows_plus_n_more_never_drops():
+    """A session with more PRs than fit shows the first _PR_SHOWN inline and a
+    "+N more" chip — nothing silently drops off the end (the old prs[:5] bug)."""
+    base, claude, repo, cache = workspace()
+    try:
+        mkfootprint(claude, "-app", "pr000009", repo,
+                    edits=[os.path.join(repo, "x.py")], prs=list(range(1, 10)))
+        s = V.collect_sessions([("app", repo)], cache, claude_dir=claude)
+        h = V.sessions_html(s)
+        assert h.count('class="wtchip pr"') == V._PR_SHOWN   # exactly 6 clickable chips
+        assert "+3 more" in h                                # overflow named, not dropped
+        assert "PR #9" in h                                  # the rest live in the hover title
+    finally:
+        shutil.rmtree(base, ignore_errors=True)
+
+
 if __name__ == "__main__":
     fails = 0
     for fn in sorted(k for k in list(globals()) if k.startswith("test_")):
