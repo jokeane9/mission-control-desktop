@@ -495,6 +495,66 @@ def test_end_session_terminates_registered_pid():
         shutil.rmtree(base, ignore_errors=True)
 
 
+def test_custom_title_becomes_the_session_title():
+    """A type:"custom-title" line (which carries no cwd/timestamp/usage) is
+    captured and leads the row; the UUID drops to a secondary id — and the
+    conversation body still never leaks."""
+    base, claude, repo, cache = workspace()
+    try:
+        d = os.path.join(claude, "projects", "-app")
+        os.makedirs(d)
+        with open(os.path.join(d, "tt000001.jsonl"), "w") as f:
+            f.write(json.dumps({"type": "user", "cwd": repo, "gitBranch": "main",
+                                "timestamp": ts(1),
+                                "message": {"content": "SECRET_BODY"}}) + "\n")
+            f.write(json.dumps({"type": "custom-title", "sessionId": "tt000001",
+                                "customTitle": "Fix the checkout bug"}) + "\n")
+            f.write(json.dumps({"type": "assistant", "cwd": repo, "timestamp": ts(0),
+                                "message": {"content": "SECRET_BODY", "id": "m0",
+                                            "usage": {"input_tokens": 1, "output_tokens": 1,
+                                                      "cache_creation_input_tokens": 0,
+                                                      "cache_read_input_tokens": 0}}}) + "\n")
+        s = V.collect_sessions([("app", repo)], cache, claude_dir=claude)[0]
+        assert s["title"] == "Fix the checkout bug"
+        h = V.sessions_html([s])
+        assert "Fix the checkout bug" in h        # the human title leads the row
+        assert "wtsid" in h                       # UUID demoted to secondary id
+        assert "SECRET_BODY" not in json.dumps(s) and "SECRET_BODY" not in h
+    finally:
+        shutil.rmtree(base, ignore_errors=True)
+
+
+def test_session_without_custom_title_falls_back_to_id():
+    base, claude, repo, cache = workspace()
+    try:
+        mktranscript(claude, "-app", "nt000001", repo, hours_ago=0)
+        s = V.collect_sessions([("app", repo)], cache, claude_dir=claude)[0]
+        assert s["title"] == ""
+        h = V.sessions_html([s])
+        assert "nt000001" in h                    # the id still leads
+        assert "wtsid" not in h                   # no secondary-id span without a title
+    finally:
+        shutil.rmtree(base, ignore_errors=True)
+
+
+def test_html_subtitle_counts_running_not_just_active():
+    def rec(sid, running, active, pid=0):
+        return {"id": sid, "title": "", "source": "claude", "repo": "app", "cwd": "/r",
+                "branch": "main", "branches": [], "files": [], "dirs": [],
+                "prs": [], "tools": {}, "started": "", "ended": "",
+                "age_min": 5 if active else 5000, "mins": 1, "msgs": 1,
+                "tokens": 10, "worktree": "", "worktree_live": False,
+                "active": active, "running": running, "pid": pid}
+    rows = [rec("aaaa", True, True, 111),     # running + active
+            rec("bbbb", True, False, 222),    # running but quiet — the case the
+                                              # old 'active' count made invisible
+            rec("cccc", False, False)]        # finished
+    h = V.sessions_html(rows)
+    assert "2 running" in h                   # both live processes, not just the active one
+    assert h.count("&#9209; End") == 2        # End control on exactly the running rows
+    assert h.count(">running</span>") == 2    # and both carry the running label
+
+
 if __name__ == "__main__":
     fails = 0
     for fn in sorted(k for k in list(globals()) if k.startswith("test_")):

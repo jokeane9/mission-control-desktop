@@ -236,19 +236,26 @@ def _parse_transcript(path):
     import collections
     ids = {}
     meta = {"cwd": "", "branch": "", "start": "", "end": "", "msgs": 0, "wts": [],
-            "branches": [], "prs": []}
+            "branches": [], "prs": [], "title": ""}
     files, dirs, tools = collections.Counter(), collections.Counter(), collections.Counter()
     try:
         for line in open(path, encoding="utf-8", errors="ignore"):
             has_usage = '"usage"' in line
             # Fast path: skip lines that carry neither usage nor anything meta
             # needs. Substring checks are far cheaper than json.loads per line.
-            if not has_usage and '"cwd"' not in line and '"timestamp"' not in line:
+            # custom-title lines carry only customTitle/sessionId/type — no cwd,
+            # timestamp or usage — so they must be let through explicitly, or the
+            # human title is silently never captured.
+            if (not has_usage and '"cwd"' not in line
+                    and '"timestamp"' not in line and '"customTitle"' not in line):
                 continue
             try:
                 d = json.loads(line)
             except Exception:
                 continue
+            ct = d.get("customTitle")
+            if ct:
+                meta["title"] = ct          # the human title; last rename wins
             ts = d.get("timestamp")
             if ts:
                 meta["start"] = meta["start"] or ts     # first line wins
@@ -324,7 +331,7 @@ def _parse_transcript(path):
     return {"days": days, "meta": meta}
 
 
-_CACHE_V = 4        # v2 meta; v3 meta["wts"]; v4 footprint (branches/files/dirs/prs/tools)
+_CACHE_V = 5        # v2 meta; v3 wts; v4 footprint; v5 meta["title"] (customTitle)
 
 
 def _transcripts(cache_path, claude_dir=CLAUDE_DIR):
@@ -896,10 +903,14 @@ def worktrees_html(worktrees):
 # worktree on a clean exit, so an interrupted session leaves a folder no
 # `git status` mentions and a transcript nobody reads. Here they meet.
 #
-# PRIVACY, non-negotiable: metadata only — never prompts, never responses, never
-# titles. Timings, counts, paths, token totals. The transcripts are the most
-# sensitive thing on the machine; this view reads them and must never surface
-# their content, even locally.
+# PRIVACY, non-negotiable: the conversation BODY never surfaces — never a prompt,
+# never a response, never a tool result. What we do surface is labels and counts:
+# timings, file paths, branch names, PR numbers, token totals, and the session's
+# own title (customTitle — a short, user-editable label Claude Code stores as
+# metadata, not conversation text). The transcripts are the most sensitive thing
+# on the machine; this view reads them and must never leak their content, even
+# locally. The title is the one human-authored string we treat as a name, not a
+# body — it is what makes a row legible; everything else stays derived signal.
 # --------------------------------------------------------------------------- #
 SESSIONS_DAYS = 30              # history window for the view
 SESSION_ACTIVE_MIN = 30         # last activity within this → still live
@@ -1030,7 +1041,7 @@ def _match_repo(cwd, project_dirs):
 # --------------------------------------------------------------------------- #
 def _session_record(sid, repo, source, *, cwd="", branch="", branches=(),
                     files=(), dirs=(), prs=(), tools=None, start=None, end=None,
-                    now=None, worktrees=()):
+                    now=None, worktrees=(), title=""):
     """One session in the canonical shape. Every source builds records through
     here, so the schema has a single definition and honest empties are uniform —
     a field a tool doesn't record (Cursor has no tokens/PRs) stays 0/[]."""
@@ -1039,6 +1050,7 @@ def _session_record(sid, repo, source, *, cwd="", branch="", branches=(),
     age_min = max(0, int((now - end).total_seconds() / 60)) if end else 10 ** 9
     return {
         "id": (sid or "")[:8],
+        "title": title or "",               # human title (customTitle), if any
         "source": source,                   # "claude" | "cursor"
         "repo": repo,
         "cwd": cwd,
@@ -1099,7 +1111,8 @@ class ClaudeSource:
                 branch=meta.get("branch") or "", branches=meta.get("branches") or [],
                 files=meta.get("files") or [], dirs=meta.get("dirs") or [],
                 prs=meta.get("prs") or [], tools=meta.get("tools") or {},
-                start=start, end=end, now=now, worktrees=wts)
+                start=start, end=end, now=now, worktrees=wts,
+                title=meta.get("title") or "")
             rec["msgs"] = meta.get("msgs") or 0
             rec["tokens"] = sum(tokens)
             # Join the live-process registry by FULL session id — the record's
@@ -1338,8 +1351,12 @@ def sessions_html(sessions, sources_present=None):
     a pill (selecting it shows an honest empty), so "quiet" is distinct from
     "not installed". Defaults to whatever produced rows (back-compat)."""
     esc = html.escape
-    live = [s for s in sessions if s["active"]]
-    ghosts = [s for s in sessions if s["worktree_live"] and not s["active"]]
+    # running = a registered, still-alive process (the fact the rows now show);
+    # active is the old 30-min activity guess. Headline the fact so the subtitle
+    # agrees with the row badges — and don't call a running session's worktree a
+    # ghost, since it hasn't been abandoned yet.
+    running = [s for s in sessions if s.get("running")]
+    ghosts = [s for s in sessions if s["worktree_live"] and not s.get("running")]
     present = list(sources_present
                    or sorted({s.get("source") or "claude" for s in sessions}))
     # per-tool counts for the subtitle, in a stable order
@@ -1352,7 +1369,7 @@ def sessions_html(sessions, sources_present=None):
     sub = (f'{len(sessions)} session{"s" if len(sessions) != 1 else ""} · '
            f'last {SESSIONS_DAYS} days'
            + (f' · {bysrc}' if bysrc and len(present) > 1 else "")
-           + (f' · {len(live)} live' if live else "")
+           + (f' · {len(running)} running' if running else "")
            + (f' · {len(ghosts)} left a worktree behind' if ghosts else ""))
     out = [f'''<div class="dhead"><span class="dname">Sessions</span>
     <span class="dthesis">{esc(sub) if sessions else "no recent sessions"}</span></div>''']
@@ -1461,8 +1478,16 @@ def sessions_html(sessions, sources_present=None):
             # two orthogonal channels, never overloaded onto one mark.
             src = s.get("source") or "claude"
             tag = (f'<span class="ssrc {esc(src)}">{esc(_SOURCE_LABEL.get(src, src))}</span>')
+            # Lead with the human title when the session has one; the UUID drops
+            # to a small secondary id. No title → the id leads, as before, and the
+            # footprint line below still carries the "what it did" identity.
+            if s.get("title"):
+                name = (f'<span class="wtname">{esc(s["title"])}</span>'
+                        f'<span class="wtsid">{esc(s["id"])}</span>')
+            else:
+                name = f'<span class="wtname">{esc(s["id"])}</span>'
             body.append(f'''<div class="wtrow" data-src="{esc(src)}">
-  <div class="wtmain">{dot}{tag}<span class="wtname">{esc(s["id"])}</span>{branch}{state}</div>
+  <div class="wtmain">{dot}{tag}{name}{branch}{state}</div>
   <div class="wtpath" title="{esc(s["cwd"], quote=True)}">{footline}</div>
   <div class="wtchips">{"".join(chips)}{endctl}</div>
 </div>''')
