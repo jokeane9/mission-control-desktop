@@ -87,6 +87,35 @@ coding agents.
 - **Still open:** a cross-tool, local, read-only pane over the coding agents you *use*. No
   incumbent will build it — it means watching their competitors too.
 
+## 04 · The tool landscape — who's actually big
+
+The field, grouped by the job each tool does. The rows are *very* unequal in weight — and
+that inequality is itself a signal.
+
+| Job | Representative tools | Weight |
+|---|---|---|
+| **The agents** — do the work | Cursor, Claude Code, GitHub Copilot, Aider, Windsurf | 🟩 Massive |
+| **Orchestrate** — run many at once | FleetCode, Claude Squad, Conductor, parallel-code | ⬜ Grassroots OSS |
+| **Review & trust** — verify output | CodeRabbit, Greptile, Graphite, Codacy | 🟦 Hot / raising now |
+| **Team metrics** — human PR velocity | LinearB, Jellyfish, Swarmia, Faros AI | 🟩 Established |
+| **LLM-app observability** — agents you build | Langfuse, LangSmith, Braintrust, Arize, Helicone, Datadog | 🟩 Big / funded |
+| **The record** — git | GitHub, GitLab | 🟩 Universal |
+| **Watch agents you *use*** — cross-tool, local | **Orrery** — nearly alone | 🟦 Open lane |
+
+**Reading the weights:**
+
+- The **orchestration** row is all energy, no money — small OSS side-projects. People care
+  enough to hack; nobody's built a business. *(Don't join this race.)*
+- The **money + paying pain** cluster in **review & trust** — CodeRabbit, Greptile, and
+  Graphite are raising *right now* on exactly the bottleneck §01 quantified.
+- The **open lane** — watch the agents you *use*, cross-tool and local — is close to empty.
+  That's Orrery, nearly alone.
+
+**The move:** don't fight the empty lane on novelty alone. Plant the flag where the **open
+lane overlaps review & trust** — the local, cross-tool watchtower that *also* answers
+*"what shipped without review or tests?"* That intersection — "whitespace nobody owns" ∩
+"pain people pay to fix" — is the strongest place to stand.
+
 ---
 
 ## Recommendations — product positioning
