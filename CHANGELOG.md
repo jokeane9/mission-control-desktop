@@ -7,6 +7,35 @@ platforms.
 
 ## [Unreleased]
 
+## [2.5.0] — 2026-07-22
+### Added
+- **Sessions is a control plane, not just a mirror.** Running sessions get an
+  **⏹ End** button — a two-step confirm that sends the Claude process `SIGTERM`,
+  so it exits *cleanly* and removes its own worktree (no ghost left behind).
+  Whitelisted to a pid the live registry actually owns, so a stale or spoofed id
+  can never make Orrery signal an unrelated process. Orrery's one destructive
+  act, deliberately narrow.
+- **Real "is it running?"** Orrery reads the live-process registry under
+  `~/.claude/sessions/` and verifies each pid, so a session is **running** (a
+  fact) rather than merely *active* (the old 30-minute activity guess). A process
+  that's alive but idle > 8h reads **possibly stuck** — the forgotten-window case
+  you couldn't spot before.
+### Changed
+- **Sessions view redesign.** Rows now lead with their **human title** (the UUID
+  drops to a small secondary id), and the list splits along two axes: **Live &
+  active** (running processes, cross-repo, most-recently-active first) up top, a
+  **Repo graveyard** (finished/dead, grouped by home repo) below. A disciplined
+  colour system carries state — **green = alive, amber = needs you**, everything
+  at rest neutral grey — so the view reads instead of blinking.
+- **Every repo a session touched is named.** Cross-repo PRs are tagged with their
+  own repo (`PR #226 wp-diagnostic`) so work no longer looks misfiled under the
+  wrong card, and live rows state their home repo explicitly.
+- **PRs never silently drop.** Past the inline cap, a `+N more` chip names the
+  count and lists the rest on hover.
+- **Scheduled routines are hidden.** A routine registers locally as an ordinary
+  session; Orrery matches session titles against your `~/.claude/scheduled-tasks/`
+  and drops them — routines are managed in Claude Code, not here.
+
 ## [2.4.0] — 2026-07-17
 ### Added
 - **Sessions now reads Cursor too.** The Sessions view is no longer Claude-only —
